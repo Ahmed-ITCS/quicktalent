@@ -42,7 +42,10 @@
           <small>{{ 'God Admin' if is_admin else current_user.email }}</small>
         </div>
       </div>
-      <a class="btn btn-outline btn-sm" href="{{ url_for('auth.logout') }}">Log out</a>
+      <a class="btn btn-outline btn-sm nav-logout" href="{{ url_for('auth.logout') }}" aria-label="Log out">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+        <span class="nav-logout-label">Log out</span>
+      </a>
       <button class="icon-btn nav-toggle" id="navToggle" aria-label="Toggle menu">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
       </button>
