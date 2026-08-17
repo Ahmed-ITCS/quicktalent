@@ -491,18 +491,22 @@ class AirtableBackend(_BaseBackend):
 
     # --------------------------------------------------------------- users
     def create_user(self, email, password_hash, company_name, phone, role="hr", is_verified=False):
-        rec = self.hr.create(
-            {
-                AIR_HR["email"]: email,
-                AIR_HR["password_hash"]: password_hash,
-                AIR_HR["company_name"]: company_name,
-                AIR_HR["phone"]: phone or "",
-                AIR_HR["role"]: role,
-                AIR_HR["is_verified"]: bool(is_verified),
-                AIR_HR["is_blocked"]: False,
-            },
-            typecast=True,
-        )
+        fields = {
+            AIR_HR["email"]: email,
+            AIR_HR["password_hash"]: password_hash,
+            AIR_HR["company_name"]: company_name,
+            AIR_HR["phone"]: phone or "",
+            AIR_HR["role"]: role,
+            AIR_HR["is_verified"]: bool(is_verified),
+            AIR_HR["is_blocked"]: False,
+        }
+        try:
+            rec = self.hr.create(fields, typecast=True)
+        except Exception:
+            # some bases store flags as text/select "1"/"0" — mirror update_user
+            for logical in ("is_verified", "is_blocked"):
+                fields[AIR_HR[logical]] = "1" if fields[AIR_HR[logical]] else "0"
+            rec = self.hr.create(fields, typecast=True)
         return self._user_from_row(rec)
 
     def get_user_by_email(self, email):
