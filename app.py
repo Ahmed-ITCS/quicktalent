@@ -61,6 +61,14 @@ def create_app():
         user = database.db.ensure_god(config.GOD_EMAIL, hash_password(config.GOD_PASSWORD))
         app.logger.info("god account ready: %s (role=%s)", user["email"], user["role"])
 
+    app.logger.info(
+        "QuickTalent boot: backend=%s base=%s tables=%r sort_field=%r",
+        config.backend_name,
+        config.AIRTABLE_BASE_ID or "-",
+        [config.AIRTABLE_CANDIDATES_TABLE, config.AIRTABLE_HR_TABLE, config.AIRTABLE_CONTACTS_TABLE],
+        config.AIRTABLE_SORT_FIELD,
+    )
+
     return app
 
 
