@@ -1,8 +1,11 @@
 """Data access layer.
 
-Two backends:
-- Supabase (Postgres via PostgREST) when SUPABASE_URL/KEY are configured.
-- SQLite dev fallback (auto-seeded demo data) when they are not.
+Three interchangeable backends (selected at boot, highest priority first):
+1. Supabase (Postgres via PostgREST)  — when SUPABASE_URL/KEY are configured
+2. Airtable                          — when AIRTABLE_API_KEY/AIRTABLE_BASE_ID are configured
+3. SQLite dev fallback               — otherwise (auto-seeded demo data)
+
+All backends expose the same interface; routes are backend-agnostic.
 """
 
 import json
@@ -36,38 +39,117 @@ CANDIDATE_FIELDS = {
     "status": ["status", "candidate_status", "employment_status"],
 }
 
+# Airtable canonical field names (see AIRTABLE_SETUP.md)
+AIR = {
+    "name": "Name",
+    "email": "Email",
+    "phone": "Phone",
+    "job_title": "Job Title",
+    "location": "Location",
+    "linkedin_url": "LinkedIn URL",
+    "skills": "Skills",
+    "years_experience": "Years of Experience",
+    "last_employer": "Last Employer",
+    "resume_url": "Resume",
+    "status": "Status",
+}
+AIR_HR = {
+    "email": "Email",
+    "password_hash": "Password Hash",
+    "company_name": "Company Name",
+    "phone": "Phone",
+    "role": "Role",
+    "is_verified": "Verified",
+    "is_blocked": "Blocked",
+    "created_at": "Created At",
+}
+AIR_CONTACT = {
+    "hr_id": "HR ID",
+    "candidate_id": "Candidate ID",
+    "status": "Status",
+    "created_at": "Created At",
+}
+
 DEV_DB_PATH = os.path.join(os.path.dirname(__file__), "var", "dev.db")
 
 
-class DB:
-    def __init__(self):
-        self._supa = None
-        self._cols = None
-        self._sqlite = None
-        if config.supabase_enabled:
-            from supabase import create_client
+# ---------------------------------------------------------------------------
+# Shared normalization helpers
+# ---------------------------------------------------------------------------
+def _iso(value):
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return value
 
-            self._supa = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
 
-    # ------------------------------------------------------------------ util
+def _normalize_candidate(fields, raw_id, created_at):
+    """Map a raw candidate fields-dict (keyed by logical names) to a canonical dict."""
+    out = {"raw": fields}
+    for logical in AIR:
+        value = fields.get(logical)
+        if logical == "skills":
+            if isinstance(value, str):
+                try:
+                    parsed = json.loads(value)
+                    value = parsed if isinstance(parsed, list) else [value]
+                except Exception:
+                    value = [s.strip() for s in value.split(",") if s.strip()]
+            elif value is None:
+                value = []
+            out["skills"] = value
+        else:
+            out[logical] = value
+    out["id"] = raw_id
+    status = (out.get("status") or "available").lower()
+    if status not in ("available", "employed", "closed"):
+        status = "available"
+    out["status"] = status
+    try:
+        out["years_experience"] = (
+            float(out["years_experience"]) if out["years_experience"] not in (None, "") else None
+        )
+    except (TypeError, ValueError):
+        out["years_experience"] = None
+    out["created_at"] = _iso(created_at)
+    return out
+
+
+class _BaseBackend:
     @property
-    def is_supabase(self) -> bool:
-        return self._supa is not None
+    def is_supabase(self):
+        return False
 
-    def now_iso(self) -> str:
+    @property
+    def is_airtable(self):
+        return False
+
+    def now_iso(self):
         return datetime.now(timezone.utc).isoformat()
+
+    def normalize_candidate(self, row):
+        raise NotImplementedError
+
+
+# ===========================================================================
+# Supabase backend
+# ===========================================================================
+class SupabaseBackend(_BaseBackend):
+    def __init__(self):
+        from supabase import create_client
+
+        self._supa = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
+        self._cols = None
+
+    @property
+    def is_supabase(self):
+        return True
 
     # -------------------------------------------------------- candidate cols
     def candidate_columns(self):
         if self._cols is not None:
             return self._cols
-        if self.is_supabase:
-            data = self._supa.table("candidates").select("*").limit(1).execute().data
-            self._cols = list(data[0].keys()) if data else []
-        else:
-            with self._conn() as c:
-                cols = [r[1] for r in c.execute("pragma table_info(candidates)")]
-            self._cols = cols
+        data = self._supa.table("candidates").select("*").limit(1).execute().data
+        self._cols = list(data[0].keys()) if data else []
         return self._cols
 
     def resolve_col(self, logical):
@@ -76,6 +158,553 @@ class DB:
             if candidate in cols:
                 return candidate
         return None
+
+    def normalize_candidate(self, row):
+        if row is None:
+            return None
+        raw = dict(row) if not isinstance(row, dict) else row
+        fields = {logical: (raw.get(col) if (col := self.resolve_col(logical)) else None) for logical in AIR}
+        return _normalize_candidate(fields, raw.get("id"), raw.get("created_at"))
+
+    # --------------------------------------------------------------- users
+    def create_user(self, email, password_hash, company_name, phone, role="hr", is_verified=False):
+        row = (
+            self._supa.table("hr_accounts")
+            .insert(
+                {
+                    "email": email,
+                    "password_hash": password_hash,
+                    "company_name": company_name,
+                    "phone": phone or "",
+                    "role": role,
+                    "is_verified": is_verified,
+                    "is_blocked": False,
+                    "created_at": self.now_iso(),
+                }
+            )
+            .execute()
+            .data[0]
+        )
+        return self._user_from_row(row)
+
+    def _user_from_row(self, row):
+        row = dict(row) if not isinstance(row, dict) else row
+        return {
+            "id": row["id"],
+            "email": row["email"],
+            "password_hash": row["password_hash"],
+            "company_name": row["company_name"],
+            "phone": row.get("phone") or "",
+            "role": row.get("role") or "hr",
+            "is_verified": bool(row.get("is_verified")),
+            "is_blocked": bool(row.get("is_blocked")),
+            "created_at": row.get("created_at"),
+        }
+
+    def get_user_by_email(self, email):
+        rows = self._supa.table("hr_accounts").select("*").eq("email", (email or "").strip().lower()).execute().data
+        return self._user_from_row(rows[0]) if rows else None
+
+    def get_user_by_id(self, user_id):
+        rows = self._supa.table("hr_accounts").select("*").eq("id", user_id).execute().data
+        return self._user_from_row(rows[0]) if rows else None
+
+    def update_user(self, user_id, **fields):
+        allowed = {"company_name", "phone", "password_hash", "is_verified", "is_blocked", "role"}
+        updates = {k: v for k, v in fields.items() if k in allowed}
+        if updates:
+            self._supa.table("hr_accounts").update(updates).eq("id", user_id).execute()
+
+    def list_users(self):
+        rows = self._supa.table("hr_accounts").select("*").order("created_at").execute().data
+        return [self._user_from_row(r) for r in rows]
+
+    def delete_user(self, user_id):
+        self._supa.table("hr_accounts").delete().eq("id", user_id).execute()
+
+    def count_users(self):
+        data = self._supa.table("hr_accounts").select("id", count="exact").execute()
+        return data.count if data.count is not None else len(data.data)
+
+    # ----------------------------------------------------------- candidates
+    def search_candidates(self, filters, limit=12, offset=0, sort="newest"):
+        f = filters or {}
+        q = self._supa.table("candidates").select("*", count="exact")
+        name_col = self.resolve_col("name")
+        title_col = self.resolve_col("job_title")
+        city_col = self.resolve_col("location")
+        years_col = self.resolve_col("years_experience")
+        status_col = self.resolve_col("status")
+        if f.get("q") and name_col:
+            q = q.ilike(name_col, f"%{f['q']}%")
+        if f.get("job_title") and title_col:
+            q = q.ilike(title_col, f"%{f['job_title']}%")
+        if f.get("city") and city_col:
+            q = q.ilike(city_col, f"%{f['city']}%")
+        if f.get("min_years") and years_col:
+            q = q.gte(years_col, float(f["min_years"]))
+        if f.get("max_years") and years_col:
+            q = q.lte(years_col, float(f["max_years"]))
+        if f.get("status") and status_col:
+            q = q.eq(status_col, f["status"])
+        if sort == "name" and name_col:
+            q = q.order(name_col)
+        elif sort == "exp" and years_col:
+            q = q.order(years_col, desc=True)
+        else:
+            q = q.order("created_at", desc=True)
+        resp = q.execute()
+        rows = resp.data
+        total = resp.count if resp.count is not None else len(rows)
+        rows = [self.normalize_candidate(r) for r in rows]
+        if f.get("skill"):
+            needle = f["skill"].lower()
+            rows = [r for r in rows if any(needle in s.lower() for s in r["skills"])]
+            total = len(rows)
+        return rows[offset : offset + limit], total
+
+    def get_candidate(self, candidate_id):
+        rows = self._supa.table("candidates").select("*").eq("id", candidate_id).execute().data
+        return self.normalize_candidate(rows[0]) if rows else None
+
+    def list_all_candidates(self):
+        rows = self._supa.table("candidates").select("*").order("created_at", desc=True).execute().data
+        return [self.normalize_candidate(r) for r in rows]
+
+    def set_candidate_status(self, candidate_id, status):
+        if status in ("available", "employed", "closed"):
+            col = self.resolve_col("status") or "status"
+            self._supa.table("candidates").update({col: status}).eq("id", candidate_id).execute()
+
+    def update_candidate(self, candidate_id, **fields):
+        allowed = {"name", "email", "phone", "job_title", "location", "linkedin_url", "last_employer"}
+        for logical in allowed:
+            if logical not in fields:
+                continue
+            col = self.resolve_col(logical)
+            if col:
+                self._supa.table("candidates").update({col: fields[logical]}).eq("id", candidate_id).execute()
+
+    def delete_candidate(self, candidate_id):
+        self._supa.table("candidates").delete().eq("id", candidate_id).execute()
+
+    def count_candidates(self):
+        data = self._supa.table("candidates").select("id", count="exact").execute()
+        return data.count if data.count is not None else len(data.data)
+
+    def candidate_counts_by_status(self):
+        counts = {"available": 0, "employed": 0, "closed": 0}
+        col = self.resolve_col("status") or "status"
+        rows = self._supa.table("candidates").select(col).execute().data
+        for r in rows:
+            key = (r.get(col) or "available").lower()
+            if key in counts:
+                counts[key] += 1
+        return counts
+
+    def distinct_values(self, logical, limit=12):
+        col = self.resolve_col(logical)
+        if not col:
+            return []
+        rows = self._supa.table("candidates").select(col).limit(500).execute().data
+        values = [r.get(col) for r in rows if r.get(col)]
+        seen, out = set(), []
+        for v in values:
+            v = str(v).strip()
+            if v and v.lower() not in seen:
+                seen.add(v.lower())
+                out.append(v)
+        return out[:limit]
+
+    # ------------------------------------------------------------- contacts
+    def create_contact(self, hr_id, candidate_id):
+        existing = self.get_contact(hr_id, candidate_id)
+        if existing:
+            return existing
+        rows = (
+            self._supa.table("contacts")
+            .insert({"hr_id": hr_id, "candidate_id": candidate_id, "status": "requested", "created_at": self.now_iso()})
+            .execute()
+            .data
+        )
+        return self._contact_from_row(rows[0]) if rows else None
+
+    def get_contact(self, hr_id, candidate_id):
+        rows = (
+            self._supa.table("contacts")
+            .select("*")
+            .eq("hr_id", hr_id)
+            .eq("candidate_id", candidate_id)
+            .execute()
+            .data
+        )
+        return self._contact_from_row(rows[0]) if rows else None
+
+    def _contact_from_row(self, row):
+        row = dict(row) if not isinstance(row, dict) else row
+        return {
+            "id": row["id"],
+            "hr_id": row["hr_id"],
+            "candidate_id": row["candidate_id"],
+            "status": row["status"],
+            "created_at": row.get("created_at"),
+        }
+
+    def list_contacts_for_hr(self, hr_id):
+        rows = (
+            self._supa.table("contacts")
+            .select("*, candidates(*)")
+            .eq("hr_id", hr_id)
+            .order("created_at", desc=True)
+            .execute()
+            .data
+        )
+        out = []
+        for c in rows:
+            cand_raw = c.get("candidates")
+            out.append({"contact": self._contact_from_row(c), "candidate": self.normalize_candidate(cand_raw)})
+        return out
+
+    def list_all_contacts(self):
+        rows = (
+            self._supa.table("contacts")
+            .select("*, candidates(*), hr_accounts(*)")
+            .order("created_at", desc=True)
+            .execute()
+            .data
+        )
+        out = []
+        for c in rows:
+            cand_raw = c.get("candidates")
+            hr_raw = c.get("hr_accounts")
+            out.append(
+                {
+                    "contact": self._contact_from_row(c),
+                    "candidate": self.normalize_candidate(cand_raw),
+                    "hr": self._user_from_row(hr_raw) if hr_raw else None,
+                }
+            )
+        return out
+
+    def set_contact_status(self, contact_id, status):
+        if status in ("requested", "closed"):
+            self._supa.table("contacts").update({"status": status}).eq("id", contact_id).execute()
+
+    def delete_contact(self, contact_id):
+        self._supa.table("contacts").delete().eq("id", contact_id).execute()
+
+    def count_contacts(self):
+        data = self._supa.table("contacts").select("id", count="exact").execute()
+        return data.count if data.count is not None else len(data.data)
+
+    # ------------------------------------------------------------ resume url
+    def resume_url(self, candidate):
+        url = candidate.get("resume_url")
+        if not url:
+            return None
+        if url.startswith("http://") or url.startswith("https://"):
+            return url
+        try:
+            res = self._supa.storage.from_(config.RESUME_BUCKET).create_signed_url(url, 3600)
+            return res["signedURL"]
+        except Exception:
+            return None
+
+    # --------------------------------------------------------------- god
+    def ensure_god(self, email, password_hash):
+        user = self.get_user_by_email(email)
+        if user:
+            return user
+        return self.create_user(email, password_hash, "Platform Admin", "", role="admin", is_verified=True)
+
+
+# ===========================================================================
+# Airtable backend
+# ===========================================================================
+class AirtableBackend(_BaseBackend):
+    def __init__(self):
+        from pyairtable import Api
+
+        self.api = Api(config.AIRTABLE_API_KEY)
+        self.base = self.api.base(config.AIRTABLE_BASE_ID)
+        self.candidates = self.base.table(config.AIRTABLE_CANDIDATES_TABLE)
+        self.hr = self.base.table(config.AIRTABLE_HR_TABLE)
+        self.contacts = self.base.table(config.AIRTABLE_CONTACTS_TABLE)
+
+    @property
+    def is_airtable(self):
+        return True
+
+    # ------------------------------------------------------------ helpers
+    @staticmethod
+    def _esc(value):
+        return str(value).replace("'", "\\'")
+
+    def _fields(self, rec):
+        return rec.get("fields", {})
+
+    def normalize_candidate(self, row):
+        if row is None:
+            return None
+        fields = dict(self._fields(row))
+        logical = {k: fields.get(v) for k, v in AIR.items()}
+        return _normalize_candidate(logical, row["id"], fields.get("Created At"))
+
+    def _user_from_row(self, rec):
+        f = self._fields(rec)
+        return {
+            "id": rec["id"],
+            "email": f.get(AIR_HR["email"], ""),
+            "password_hash": f.get(AIR_HR["password_hash"], ""),
+            "company_name": f.get(AIR_HR["company_name"], ""),
+            "phone": f.get(AIR_HR["phone"]) or "",
+            "role": f.get(AIR_HR["role"]) or "hr",
+            "is_verified": bool(f.get(AIR_HR["is_verified"], False)),
+            "is_blocked": bool(f.get(AIR_HR["is_blocked"], False)),
+            "created_at": _iso(f.get(AIR_HR["created_at"])),
+        }
+
+    def _contact_from_row(self, rec):
+        f = self._fields(rec)
+        return {
+            "id": rec["id"],
+            "hr_id": f.get(AIR_CONTACT["hr_id"]),
+            "candidate_id": f.get(AIR_CONTACT["candidate_id"]),
+            "status": f.get(AIR_CONTACT["status"]) or "requested",
+            "created_at": _iso(f.get(AIR_CONTACT["created_at"])),
+        }
+
+    @staticmethod
+    def _sort(sort):
+        mapping = {
+            "newest": [("Created At", False)],
+            "oldest": [("Created At", True)],
+            "name": [(AIR["name"], True)],
+            "exp": [(AIR["years_experience"], True)],
+        }
+        specs = mapping.get(sort, mapping["newest"])
+        return [{"field": f, "direction": "asc" if asc else "desc"} for f, asc in specs]
+
+    def _candidate_formula(self, filters):
+        f = filters or {}
+        parts = []
+        if f.get("q"):
+            parts.append(f"FIND(LOWER('{self._esc(f['q']).lower()}'), LOWER({{{AIR['name']}}})) > 0")
+        if f.get("job_title"):
+            parts.append(f"FIND(LOWER('{self._esc(f['job_title']).lower()}'), LOWER({{{AIR['job_title']}}})) > 0")
+        if f.get("city"):
+            parts.append(f"FIND(LOWER('{self._esc(f['city']).lower()}'), LOWER({{{AIR['location']}}})) > 0")
+        if f.get("min_years") is not None:
+            parts.append(f"{{{AIR['years_experience']}}} >= {float(f['min_years'])}")
+        if f.get("max_years") is not None:
+            parts.append(f"{{{AIR['years_experience']}}} <= {float(f['max_years'])}")
+        if f.get("status"):
+            parts.append(f"{{{AIR['status']}}} = '{self._esc(f['status'])}'")
+        return "AND(" + ", ".join(parts) + ")" if parts else None
+
+    # --------------------------------------------------------------- users
+    def create_user(self, email, password_hash, company_name, phone, role="hr", is_verified=False):
+        rec = self.hr.create(
+            {
+                AIR_HR["email"]: email,
+                AIR_HR["password_hash"]: password_hash,
+                AIR_HR["company_name"]: company_name,
+                AIR_HR["phone"]: phone or "",
+                AIR_HR["role"]: role,
+                AIR_HR["is_verified"]: bool(is_verified),
+                AIR_HR["is_blocked"]: False,
+            }
+        )
+        return self._user_from_row(rec)
+
+    def get_user_by_email(self, email):
+        email = (email or "").strip().lower()
+        rows = self.hr.all(formula=f"FIND(LOWER('{self._esc(email)}'), LOWER({{{AIR_HR['email']}}})) > 0", max_records=1)
+        return self._user_from_row(rows[0]) if rows else None
+
+    def get_user_by_id(self, user_id):
+        try:
+            return self._user_from_row(self.hr.get(user_id))
+        except Exception:
+            return None
+
+    def update_user(self, user_id, **fields):
+        allowed = {"company_name", "phone", "password_hash", "is_verified", "is_blocked", "role"}
+        updates = {
+            AIR_HR[k]: (bool(v) if k in ("is_verified", "is_blocked") else v)
+            for k, v in fields.items()
+            if k in allowed
+        }
+        if updates:
+            self.hr.update(user_id, updates)
+
+    def list_users(self):
+        return [self._user_from_row(r) for r in self.hr.all(sort=[{"field": "Created At", "direction": "asc"}])]
+
+    def delete_user(self, user_id):
+        self.hr.delete(user_id)
+
+    def count_users(self):
+        return len(self.hr.all(fields=[AIR_HR["email"]], page_size=100))
+
+    # ----------------------------------------------------------- candidates
+    def search_candidates(self, filters, limit=12, offset=0, sort="newest"):
+        rows = self.candidates.all(formula=self._candidate_formula(filters), sort=self._sort(sort))
+        rows = [self.normalize_candidate(r) for r in rows]
+        f = filters or {}
+        if f.get("skill"):
+            needle = f["skill"].lower()
+            rows = [r for r in rows if any(needle in s.lower() for s in r["skills"])]
+        total = len(rows)
+        return rows[offset : offset + limit], total
+
+    def get_candidate(self, candidate_id):
+        try:
+            return self.normalize_candidate(self.candidates.get(candidate_id))
+        except Exception:
+            return None
+
+    def list_all_candidates(self):
+        return [self.normalize_candidate(r) for r in self.candidates.all(sort=self._sort("newest"))]
+
+    def set_candidate_status(self, candidate_id, status):
+        if status in ("available", "employed", "closed"):
+            self.candidates.update(candidate_id, {AIR["status"]: status})
+
+    def update_candidate(self, candidate_id, **fields):
+        allowed = {"name", "email", "phone", "job_title", "location", "linkedin_url", "last_employer"}
+        updates = {AIR[k]: fields[k] for k in allowed if fields.get(k) is not None}
+        if updates:
+            self.candidates.update(candidate_id, updates)
+
+    def delete_candidate(self, candidate_id):
+        self.candidates.delete(candidate_id)
+
+    def count_candidates(self):
+        return len(self.candidates.all(fields=[AIR["status"]], page_size=100))
+
+    def candidate_counts_by_status(self):
+        counts = {"available": 0, "employed": 0, "closed": 0}
+        for r in self.candidates.all(fields=[AIR["status"]], page_size=100):
+            key = (self._fields(r).get(AIR["status"]) or "available").lower()
+            if key in counts:
+                counts[key] += 1
+        return counts
+
+    def distinct_values(self, logical, limit=12):
+        col = AIR.get(logical)
+        if not col:
+            return []
+        values = [self._fields(r).get(col) for r in self.candidates.all(fields=[col], page_size=100)]
+        seen, out = set(), []
+        for v in values:
+            if not v:
+                continue
+            if isinstance(v, list):
+                for item in v:
+                    v = str(item).strip()
+                    if v and v.lower() not in seen:
+                        seen.add(v.lower())
+                        out.append(v)
+            else:
+                v = str(v).strip()
+                if v and v.lower() not in seen:
+                    seen.add(v.lower())
+                    out.append(v)
+        return out[:limit]
+
+    # ------------------------------------------------------------- contacts
+    def create_contact(self, hr_id, candidate_id):
+        existing = self.get_contact(hr_id, candidate_id)
+        if existing:
+            return existing
+        rec = self.contacts.create(
+            {
+                AIR_CONTACT["hr_id"]: hr_id,
+                AIR_CONTACT["candidate_id"]: candidate_id,
+                AIR_CONTACT["status"]: "requested",
+            }
+        )
+        return self._contact_from_row(rec)
+
+    def get_contact(self, hr_id, candidate_id):
+        formula = (
+            f"AND({{{AIR_CONTACT['hr_id']}}} = '{self._esc(hr_id)}', "
+            f"{{{AIR_CONTACT['candidate_id']}}} = '{self._esc(candidate_id)}')"
+        )
+        rows = self.contacts.all(formula=formula, max_records=1)
+        return self._contact_from_row(rows[0]) if rows else None
+
+    def _candidates_by_id(self):
+        return {r["id"]: self.normalize_candidate(r) for r in self.candidates.all()}
+
+    def _users_by_id(self):
+        return {r["id"]: self._user_from_row(r) for r in self.hr.all()}
+
+    def list_contacts_for_hr(self, hr_id):
+        rows = self.contacts.all(
+            formula=f"{{{AIR_CONTACT['hr_id']}}} = '{self._esc(hr_id)}'",
+            sort=[{"field": "Created At", "direction": "desc"}],
+        )
+        cands = self._candidates_by_id()
+        out = []
+        for c in rows:
+            contact = self._contact_from_row(c)
+            out.append({"contact": contact, "candidate": cands.get(contact["candidate_id"])})
+        return out
+
+    def list_all_contacts(self):
+        rows = self.contacts.all(sort=[{"field": "Created At", "direction": "desc"}])
+        cands = self._candidates_by_id()
+        users = self._users_by_id()
+        out = []
+        for c in rows:
+            contact = self._contact_from_row(c)
+            out.append(
+                {
+                    "contact": contact,
+                    "candidate": cands.get(contact["candidate_id"]),
+                    "hr": users.get(contact["hr_id"]),
+                }
+            )
+        return out
+
+    def set_contact_status(self, contact_id, status):
+        if status in ("requested", "closed"):
+            self.contacts.update(contact_id, {AIR_CONTACT["status"]: status})
+
+    def delete_contact(self, contact_id):
+        self.contacts.delete(contact_id)
+
+    def count_contacts(self):
+        return len(self.contacts.all(fields=[AIR_CONTACT["status"]], page_size=100))
+
+    # ------------------------------------------------------------ resume url
+    def resume_url(self, candidate):
+        value = candidate.get("resume_url")
+        if not value:
+            return None
+        if isinstance(value, str):
+            return value if value.startswith(("http://", "https://")) else None
+        if isinstance(value, list) and value:
+            url = value[0].get("url")
+            return url if url else None
+        return None
+
+    # --------------------------------------------------------------- god
+    def ensure_god(self, email, password_hash):
+        user = self.get_user_by_email(email)
+        if user:
+            return user
+        return self.create_user(email, password_hash, "Platform Admin", "", role="admin", is_verified=True)
+
+
+# ===========================================================================
+# SQLite dev backend (local fallback, seeded demo data)
+# ===========================================================================
+class SqliteBackend(_BaseBackend):
+    def __init__(self):
+        self._sqlite = None
 
     def _conn(self):
         if self._sqlite is None:
@@ -150,66 +779,27 @@ class DB:
             )
         self._conn().commit()
 
-    # ------------------------------------------------------------ normalize
     def normalize_candidate(self, row):
-        """Map a raw candidates row (supabase dict or sqlite Row) to a canonical dict."""
         if row is None:
             return None
-        raw = dict(row) if not isinstance(row, dict) else row
-        out = {"raw": raw}
-        for logical, fallbacks in CANDIDATE_FIELDS.items():
-            value = None
-            for col in fallbacks:
-                if col in raw and raw[col] not in (None, ""):
-                    value = raw[col]
-                    break
-            if logical == "skills":
-                if isinstance(value, str):
-                    try:
-                        parsed = json.loads(value)
-                        value = parsed if isinstance(parsed, list) else [value]
-                    except Exception:
-                        value = [s.strip() for s in value.split(",") if s.strip()]
-                elif value is None:
-                    value = []
-                out["skills"] = value
-            else:
-                out[logical] = value
-        out["id"] = raw.get("id")
-        status = (out.get("status") or "available").lower()
-        if status not in ("available", "employed", "closed"):
-            status = "available"
-        out["status"] = status
-        try:
-            out["years_experience"] = (
-                float(out["years_experience"]) if out["years_experience"] not in (None, "") else None
-            )
-        except (TypeError, ValueError):
-            out["years_experience"] = None
-        out["created_at"] = raw.get("created_at")
-        return out
+        raw = dict(row)
+        fields = {
+            "name": raw.get("name"),
+            "email": raw.get("email"),
+            "phone": raw.get("phone"),
+            "job_title": raw.get("job_title"),
+            "location": raw.get("location"),
+            "linkedin_url": raw.get("linkedin_url"),
+            "skills": raw.get("skills"),
+            "years_experience": raw.get("years_experience"),
+            "last_employer": raw.get("last_employer"),
+            "resume_url": raw.get("resume_url"),
+            "status": raw.get("status"),
+        }
+        return _normalize_candidate(fields, raw.get("id"), raw.get("created_at"))
 
     # --------------------------------------------------------------- users
     def create_user(self, email, password_hash, company_name, phone, role="hr", is_verified=False):
-        if self.is_supabase:
-            row = (
-                self._supa.table("hr_accounts")
-                .insert(
-                    {
-                        "email": email,
-                        "password_hash": password_hash,
-                        "company_name": company_name,
-                        "phone": phone or "",
-                        "role": role,
-                        "is_verified": is_verified,
-                        "is_blocked": False,
-                        "created_at": self.now_iso(),
-                    }
-                )
-                .execute()
-                .data[0]
-            )
-            return self._user_from_row(row)
         cid = str(uuid.uuid4())
         now = self.now_iso()
         self._conn().execute(
@@ -234,17 +824,10 @@ class DB:
         }
 
     def get_user_by_email(self, email):
-        email = (email or "").strip().lower()
-        if self.is_supabase:
-            rows = self._supa.table("hr_accounts").select("*").eq("email", email).execute().data
-            return self._user_from_row(rows[0]) if rows else None
-        row = self._conn().execute("select * from hr_accounts where email = ?", (email,)).fetchone()
+        row = self._conn().execute("select * from hr_accounts where email = ?", ((email or "").strip().lower(),)).fetchone()
         return self._user_from_row(row) if row else None
 
     def get_user_by_id(self, user_id):
-        if self.is_supabase:
-            rows = self._supa.table("hr_accounts").select("*").eq("id", user_id).execute().data
-            return self._user_from_row(rows[0]) if rows else None
         row = self._conn().execute("select * from hr_accounts where id = ?", (user_id,)).fetchone()
         return self._user_from_row(row) if row else None
 
@@ -253,193 +836,101 @@ class DB:
         updates = {k: v for k, v in fields.items() if k in allowed}
         if not updates:
             return
-        if self.is_supabase:
-            self._supa.table("hr_accounts").update(updates).eq("id", user_id).execute()
-        else:
-            sets = ", ".join(f"{k} = ?" for k in updates)
-            self._conn().execute(
-                f"update hr_accounts set {sets} where id = ?", (*updates.values(), user_id)
-            )
-            self._conn().commit()
+        sets = ", ".join(f"{k} = ?" for k in updates)
+        self._conn().execute(f"update hr_accounts set {sets} where id = ?", (*updates.values(), user_id))
+        self._conn().commit()
 
     def list_users(self):
-        if self.is_supabase:
-            rows = self._supa.table("hr_accounts").select("*").order("created_at").execute().data
-            return [self._user_from_row(r) for r in rows]
         rows = self._conn().execute("select * from hr_accounts order by created_at").fetchall()
         return [self._user_from_row(r) for r in rows]
 
     def delete_user(self, user_id):
-        if self.is_supabase:
-            self._supa.table("hr_accounts").delete().eq("id", user_id).execute()
-        else:
-            self._conn().execute("delete from hr_accounts where id = ?", (user_id,))
-            self._conn().commit()
+        self._conn().execute("delete from hr_accounts where id = ?", (user_id,))
+        self._conn().commit()
 
     def count_users(self):
-        if self.is_supabase:
-            data = self._supa.table("hr_accounts").select("id", count="exact").execute()
-            return data.count if data.count is not None else len(data.data)
         return self._conn().execute("select count(*) from hr_accounts").fetchone()[0]
 
     # ----------------------------------------------------------- candidates
     def search_candidates(self, filters, limit=12, offset=0, sort="newest"):
         f = filters or {}
-        if self.is_supabase:
-            q = self._supa.table("candidates").select("*", count="exact")
-            name_col = self.resolve_col("name")
-            title_col = self.resolve_col("job_title")
-            city_col = self.resolve_col("location")
-            years_col = self.resolve_col("years_experience")
-            status_col = self.resolve_col("status")
-            if f.get("q") and name_col:
-                q = q.ilike(name_col, f"%{f['q']}%")
-            if f.get("job_title") and title_col:
-                q = q.ilike(title_col, f"%{f['job_title']}%")
-            if f.get("city") and city_col:
-                q = q.ilike(city_col, f"%{f['city']}%")
-            if f.get("min_years") and years_col:
-                q = q.gte(years_col, float(f["min_years"]))
-            if f.get("max_years") and years_col:
-                q = q.lte(years_col, float(f["max_years"]))
-            if f.get("status") and status_col:
-                q = q.eq(status_col, f["status"])
-            if sort == "name" and name_col:
-                q = q.order(name_col)
-            elif sort == "exp" and years_col:
-                q = q.order(years_col, desc=True)
-            else:
-                q = q.order("created_at", desc=True)
-            resp = q.execute()
-            rows = resp.data
-            total = resp.count if resp.count is not None else len(rows)
-        else:
-            sql = "select * from candidates"
-            where, params = [], []
-            if f.get("q"):
-                where.append("name like ?")
-                params.append(f"%{f['q']}%")
-            if f.get("job_title"):
-                where.append("job_title like ?")
-                params.append(f"%{f['job_title']}%")
-            if f.get("city"):
-                where.append("location like ?")
-                params.append(f"%{f['city']}%")
-            if f.get("min_years"):
-                where.append("years_experience >= ?")
-                params.append(float(f["min_years"]))
-            if f.get("max_years"):
-                where.append("years_experience <= ?")
-                params.append(float(f["max_years"]))
-            if f.get("status"):
-                where.append("status = ?")
-                params.append(f["status"])
-            if where:
-                sql += " where " + " and ".join(where)
-            order = {"newest": "created_at desc", "oldest": "created_at", "name": "name", "exp": "years_experience desc"}.get(sort, "created_at desc")
-            sql += f" order by {order}"
-            rows = [dict(r) for r in self._conn().execute(sql, params).fetchall()]
-            total = len(rows)
-        rows = [self.normalize_candidate(r) for r in rows]
+        sql = "select * from candidates"
+        where, params = [], []
+        if f.get("q"):
+            where.append("name like ?")
+            params.append(f"%{f['q']}%")
+        if f.get("job_title"):
+            where.append("job_title like ?")
+            params.append(f"%{f['job_title']}%")
+        if f.get("city"):
+            where.append("location like ?")
+            params.append(f"%{f['city']}%")
+        if f.get("min_years") is not None:
+            where.append("years_experience >= ?")
+            params.append(float(f["min_years"]))
+        if f.get("max_years") is not None:
+            where.append("years_experience <= ?")
+            params.append(float(f["max_years"]))
+        if f.get("status"):
+            where.append("status = ?")
+            params.append(f["status"])
+        if where:
+            sql += " where " + " and ".join(where)
+        order = {"newest": "created_at desc", "oldest": "created_at", "name": "name", "exp": "years_experience desc"}.get(sort, "created_at desc")
+        sql += f" order by {order}"
+        rows = [self.normalize_candidate(r) for r in self._conn().execute(sql, params).fetchall()]
         if f.get("skill"):
             needle = f["skill"].lower()
             rows = [r for r in rows if any(needle in s.lower() for s in r["skills"])]
-            total = len(rows)
+        total = len(rows)
         return rows[offset : offset + limit], total
 
     def get_candidate(self, candidate_id):
-        if self.is_supabase:
-            rows = (
-                self._supa.table("candidates")
-                .select("*")
-                .eq("id", candidate_id)
-                .execute()
-                .data
-            )
-            return self.normalize_candidate(rows[0]) if rows else None
         row = self._conn().execute("select * from candidates where id = ?", (candidate_id,)).fetchone()
         return self.normalize_candidate(row) if row else None
 
     def list_all_candidates(self):
-        if self.is_supabase:
-            rows = self._supa.table("candidates").select("*").order("created_at", desc=True).execute().data
-        else:
-            rows = [dict(r) for r in self._conn().execute("select * from candidates order by created_at desc").fetchall()]
+        rows = self._conn().execute("select * from candidates order by created_at desc").fetchall()
         return [self.normalize_candidate(r) for r in rows]
 
     def set_candidate_status(self, candidate_id, status):
-        if status not in ("available", "employed", "closed"):
-            return
-        if self.is_supabase:
-            col = self.resolve_col("status") or "status"
-            self._supa.table("candidates").update({col: status}).eq("id", candidate_id).execute()
-        else:
+        if status in ("available", "employed", "closed"):
             self._conn().execute("update candidates set status = ? where id = ?", (status, candidate_id))
             self._conn().commit()
 
     def update_candidate(self, candidate_id, **fields):
-        allowed = {
-            "name", "email", "phone", "job_title", "location",
-            "linkedin_url", "last_employer",
-        }
+        allowed = {"name", "email", "phone", "job_title", "location", "linkedin_url", "last_employer"}
         updates = {k: v for k, v in fields.items() if k in allowed}
         if not updates:
             return
-        if self.is_supabase:
-            for logical in list(updates):
-                col = self.resolve_col(logical)
-                if col:
-                    self._supa.table("candidates").update({col: updates[logical]}).eq("id", candidate_id).execute()
-        else:
-            sets = ", ".join(f"{k} = ?" for k in updates)
-            self._conn().execute(
-                f"update candidates set {sets} where id = ?", (*updates.values(), candidate_id)
-            )
-            self._conn().commit()
+        sets = ", ".join(f"{k} = ?" for k in updates)
+        self._conn().execute(f"update candidates set {sets} where id = ?", (*updates.values(), candidate_id))
+        self._conn().commit()
 
     def delete_candidate(self, candidate_id):
-        if self.is_supabase:
-            self._supa.table("candidates").delete().eq("id", candidate_id).execute()
-        else:
-            self._conn().execute("delete from candidates where id = ?", (candidate_id,))
-            self._conn().commit()
+        self._conn().execute("delete from candidates where id = ?", (candidate_id,))
+        self._conn().commit()
 
     def count_candidates(self):
-        if self.is_supabase:
-            data = self._supa.table("candidates").select("id", count="exact").execute()
-            return data.count if data.count is not None else len(data.data)
         return self._conn().execute("select count(*) from candidates").fetchone()[0]
 
     def candidate_counts_by_status(self):
         counts = {"available": 0, "employed": 0, "closed": 0}
-        if self.is_supabase:
-            col = self.resolve_col("status") or "status"
-            rows = self._supa.table("candidates").select(col).execute().data
-            for r in rows:
-                key = (r.get(col) or "available").lower()
-                if key in counts:
-                    counts[key] += 1
-        else:
-            rows = self._conn().execute("select status, count(*) as n from candidates group by status").fetchall()
-            for r in rows:
-                key = (r["status"] or "available").lower()
-                if key in counts:
-                    counts[key] = r["n"]
+        rows = self._conn().execute("select status, count(*) as n from candidates group by status").fetchall()
+        for r in rows:
+            key = (r["status"] or "available").lower()
+            if key in counts:
+                counts[key] = r["n"]
         return counts
 
     def distinct_values(self, logical, limit=12):
-        col = self.resolve_col(logical)
+        col = {"job_title": "job_title", "location": "location"}.get(logical)
         if not col:
             return []
-        if self.is_supabase:
-            rows = self._supa.table("candidates").select(col).limit(500).execute().data
-            values = [r.get(col) for r in rows if r.get(col)]
-        else:
-            rows = self._conn().execute(f"select distinct {col} from candidates where {col} is not null").fetchall()
-            values = [r[0] for r in rows]
+        rows = self._conn().execute(f"select distinct {col} from candidates where {col} is not null").fetchall()
         seen, out = set(), []
-        for v in values:
-            v = str(v).strip()
+        for r in rows:
+            v = str(r[0]).strip()
             if v and v.lower() not in seen:
                 seen.add(v.lower())
                 out.append(v)
@@ -447,15 +938,6 @@ class DB:
 
     # ------------------------------------------------------------- contacts
     def create_contact(self, hr_id, candidate_id):
-        if self.is_supabase:
-            rows = (
-                self._supa.table("contacts")
-                .insert({"hr_id": hr_id, "candidate_id": candidate_id, "status": "requested", "created_at": self.now_iso()})
-                .on_conflict("hr_id,candidate_id")
-                .execute()
-                .data
-            )
-            return self._contact_from_row(rows[0]) if rows else None
         cid = str(uuid.uuid4())
         try:
             self._conn().execute(
@@ -468,19 +950,8 @@ class DB:
         return self.get_contact(hr_id, candidate_id)
 
     def get_contact(self, hr_id, candidate_id):
-        if self.is_supabase:
-            rows = (
-                self._supa.table("contacts")
-                .select("*")
-                .eq("hr_id", hr_id)
-                .eq("candidate_id", candidate_id)
-                .execute()
-                .data
-            )
-            return self._contact_from_row(rows[0]) if rows else None
         row = self._conn().execute(
-            "select * from contacts where hr_id = ? and candidate_id = ?",
-            (hr_id, candidate_id),
+            "select * from contacts where hr_id = ? and candidate_id = ?", (hr_id, candidate_id)
         ).fetchone()
         return self._contact_from_row(row) if row else None
 
@@ -495,96 +966,44 @@ class DB:
         }
 
     def list_contacts_for_hr(self, hr_id):
-        if self.is_supabase:
-            rows = (
-                self._supa.table("contacts")
-                .select("*, candidates(*)")
-                .eq("hr_id", hr_id)
-                .order("created_at", desc=True)
-                .execute()
-                .data
-            )
-        else:
-            rows = [
-                dict(r)
-                for r in self._conn()
-                .execute("select * from contacts where hr_id = ? order by created_at desc", (hr_id,))
-                .fetchall()
-            ]
+        rows = self._conn().execute("select * from contacts where hr_id = ? order by created_at desc", (hr_id,)).fetchall()
         out = []
         for c in rows:
-            cand_raw = c.get("candidates") if self.is_supabase else self.get_candidate(c["candidate_id"])
-            out.append({"contact": self._contact_from_row(c), "candidate": self.normalize_candidate(cand_raw)})
+            contact = self._contact_from_row(c)
+            out.append({"contact": contact, "candidate": self.get_candidate(contact["candidate_id"])})
         return out
 
     def list_all_contacts(self):
-        if self.is_supabase:
-            rows = (
-                self._supa.table("contacts")
-                .select("*, candidates(*), hr_accounts(*)")
-                .order("created_at", desc=True)
-                .execute()
-                .data
-            )
-        else:
-            rows = [
-                dict(r)
-                for r in self._conn()
-                .execute("select * from contacts order by created_at desc")
-                .fetchall()
-            ]
+        rows = self._conn().execute("select * from contacts order by created_at desc").fetchall()
         out = []
         for c in rows:
-            cand_raw = c.get("candidates") if self.is_supabase else self.get_candidate(c["candidate_id"])
-            hr_raw = c.get("hr_accounts") if self.is_supabase else self.get_user_by_id(c["hr_id"])
+            contact = self._contact_from_row(c)
             out.append(
                 {
-                    "contact": self._contact_from_row(c),
-                    "candidate": self.normalize_candidate(cand_raw),
-                    "hr": self._user_from_row(hr_raw) if hr_raw else None,
+                    "contact": contact,
+                    "candidate": self.get_candidate(contact["candidate_id"]),
+                    "hr": self.get_user_by_id(contact["hr_id"]),
                 }
             )
         return out
 
     def set_contact_status(self, contact_id, status):
-        if status not in ("requested", "closed"):
-            return
-        if self.is_supabase:
-            self._supa.table("contacts").update({"status": status}).eq("id", contact_id).execute()
-        else:
+        if status in ("requested", "closed"):
             self._conn().execute("update contacts set status = ? where id = ?", (status, contact_id))
             self._conn().commit()
 
     def delete_contact(self, contact_id):
-        if self.is_supabase:
-            self._supa.table("contacts").delete().eq("id", contact_id).execute()
-        else:
-            self._conn().execute("delete from contacts where id = ?", (contact_id,))
-            self._conn().commit()
+        self._conn().execute("delete from contacts where id = ?", (contact_id,))
+        self._conn().commit()
 
     def count_contacts(self):
-        if self.is_supabase:
-            data = self._supa.table("contacts").select("id", count="exact").execute()
-            return data.count if data.count is not None else len(data.data)
         return self._conn().execute("select count(*) from contacts").fetchone()[0]
 
     # ------------------------------------------------------------ resume url
     def resume_url(self, candidate):
-        """Resolve a downloadable resume URL (signed URL for supabase storage paths)."""
         url = candidate.get("resume_url")
-        if not url:
-            return None
-        if url.startswith("http://") or url.startswith("https://"):
+        if url and (url.startswith("http://") or url.startswith("https://")):
             return url
-        if self.is_supabase:
-            try:
-                res = (
-                    self._supa.storage.from_(config.RESUME_BUCKET)
-                    .create_signed_url(url, 3600)
-                )
-                return res["signedURL"]
-            except Exception:
-                return None
         return None
 
     # --------------------------------------------------------------- god
@@ -592,9 +1011,18 @@ class DB:
         user = self.get_user_by_email(email)
         if user:
             return user
-        return self.create_user(
-            email, password_hash, "Platform Admin", "", role="admin", is_verified=True
-        )
+        return self.create_user(email, password_hash, "Platform Admin", "", role="admin", is_verified=True)
 
 
-db = DB()
+# ===========================================================================
+# Backend selection
+# ===========================================================================
+def _make_backend():
+    if config.supabase_enabled:
+        return SupabaseBackend()
+    if config.airtable_enabled:
+        return AirtableBackend()
+    return SqliteBackend()
+
+
+db = _make_backend()

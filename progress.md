@@ -14,28 +14,32 @@ for a two-way conversation.
 ## 2. Architecture
 
 ```
-Flask 3 (server-rendered, Jinja2)  ──  supabase-py (PostgREST)  ──  Supabase (candidates + app tables)
-        │                                         │
-        └────────── SMTP (smtplib)  ──────────────┴── dev fallback: SQLite + var/mail.log
+Flask 3 (server-rendered, Jinja2)  ──  pyairtable (REST)  ──  Airtable (primary backend)
+        │
+        ├── Supabase (PostgREST) alternative backend
+        ├── SQLite dev fallback (var/dev.db, seeded demo data)
+        └── SMTP (smtplib)  ── console mode logs emails to var/mail.log
 ```
 
 | Component | File | Responsibility |
 |---|---|---|
 | App factory | `app.py` | Blueprints, error pages, context vars, **god seeding** |
-| Config | `config.py` | Env vars from `.env` (dotenv) |
-| Data layer | `db.py` | **Dual backend**: Supabase or SQLite dev; schema mapping; all queries |
+| Config | `config.py` | Env vars from `.env` (dotenv); backend selection |
+| Data layer | `db.py` | **Three interchangeable backends**: Airtable → Supabase → SQLite dev; same interface |
 | Email | `email_service.py` | SMTP sending + console-mode logging to `var/mail.log` |
 | Auth helpers | `auth_utils.py` | Password hashing, verification tokens, decorators, masking |
 | Auth routes | `routes_auth.py` | Register → verify → login/logout |
 | HR routes | `routes_hr.py` | Browse, detail, contact, contacts, status, settings |
 | God routes | `routes_admin.py` | Overview, all candidates, HR accounts, contacts matrix |
-| Design | `static/css/styles.css` | Hand-built enterprise design system (no Stitch) |
+| Design | `static/css/styles.css` | Minimal light-green & white enterprise design |
 
-### Deployment modes
+### Backend priority (set in `.env`)
 
-- **Supabase mode**: set `SUPABASE_URL` + `SUPABASE_KEY` in `.env` → all data via PostgREST.
-- **Local dev mode**: leave them empty → SQLite DB at `var/dev.db`, auto-seeded with 20 demo
-  candidates; emails written to `var/mail.log` instead of sent.
+| Env config | Backend |
+|---|---|
+| `AIRTABLE_API_KEY` + `AIRTABLE_BASE_ID` | **Airtable** (primary) |
+| Only `SUPABASE_URL` + `SUPABASE_KEY` | Supabase |
+| Neither | SQLite dev mode (`var/dev.db`, 20 demo candidates, emails → `var/mail.log`) |
 
 ---
 
@@ -101,9 +105,9 @@ Logical fields resolved by `CANDIDATE_FIELDS` fallback list in `db.py`:
 
 `GET /candidates` builds filters from query params → `db.search_candidates`:
 
-- Server-side (PostgREST/SQL): q (name ilike), job_title, city, min/max years, status, sort
-  (newest/oldest/name/exp).
-- **Skills filter is applied in-memory** (works for both jsonb arrays and text columns).
+- Server-side filters (Airtable formula / PostgREST / SQL): q (name), job_title, city, min/max
+  years, status, sort (newest/oldest/name/exp).
+- **Skills filter is applied in-memory** (Airtable Multi-select / jsonb arrays / text columns).
 - Pagination: 12 per page, page numbers clamped to valid range.
 - Contact info rendered **masked**: email `ab***@domain`, phone `********0112` (`auth_utils.mask_*`).
 
@@ -156,9 +160,9 @@ Status changes are global (visible to all HR) and immediately affect browse avai
 
 ## 7. Resume handling
 
-`db.resume_url`: full http(s) URL → used as-is; storage **path** → signed URL from Supabase
-Storage bucket (`RESUME_BUCKET`, default `resumes`, 1h expiry); otherwise `None` → UI shows
-"no resume".
+`db.resume_url`: full http(s) URL → used as-is; Airtable attachment list → first item's URL;
+Supabase storage **path** → signed URL (`RESUME_BUCKET`, default `resumes`, 1h expiry);
+otherwise `None` → UI shows "no resume".
 
 ---
 
@@ -167,7 +171,7 @@ Storage bucket (`RESUME_BUCKET`, default `resumes`, 1h expiry); otherwise `None`
 ```
 app.py · config.py · db.py · email_service.py · auth_utils.py · schema.sql
 routes_auth.py · routes_hr.py · routes_admin.py
-requirements.txt · .env(.example) · HOW_TO_USE.md
+requirements.txt · .env(.example) · HOW_TO_USE.md · AIRTABLE_SETUP.md
 templates/   base_public.html · base_app.html · landing · register · verify_sent · login
              candidates · candidate_detail · contacts · settings · error
              admin/ overview · candidates · hr · contacts
@@ -176,7 +180,7 @@ static/css/styles.css · static/js/main.js
 
 ---
 
-## 9. Testing performed (SQLite dev mode)
+## 9. Testing performed
 
 | Flow | Result |
 |---|---|
@@ -188,15 +192,21 @@ static/css/styles.css · static/js/main.js
 | My Contacts shows unlocked email/phone | ✅ |
 | Mark Employed → status email + candidate status change | ✅ |
 | Settings page | ✅ 200 |
+| Airtable backend (stubbed pyairtable API): god seed, users, formulas, pagination, contacts, statuses | ✅ all pass |
 
 Bugs found & fixed during testing: sqlite Row `.get` compatibility (×2), verification token
-return shape, `list_contacts_for_hr` set-comprehension unpacking.
+return shape, `list_contacts_for_hr` set-comprehension unpacking, Airtable `AIR["created_at"]`
+KeyError, sort mappings for `newest`/`oldest`.
 
-## 10. Deploy checklist (Supabase + real email)
+## 10. Deploy checklist (Airtable + real email)
 
-- [ ] Run `schema.sql` in Supabase SQL editor
-- [ ] Fill `.env`: `SUPABASE_URL`, `SUPABASE_KEY`, SMTP creds, `APP_SECRET_KEY` (long random),
-      `APP_BASE_URL`, `GOD_EMAIL`, `GOD_PASSWORD`
-- [ ] Verify candidate column names match `CANDIDATE_FIELDS` fallbacks (app logs/adapts automatically)
-- [ ] If RLS enabled → use service-role key or add `policies` from `schema.sql`
+- [ ] Create the Airtable base with exact tables/fields from `AIRTABLE_SETUP.md`
+  (Candidates, HR Accounts, Contacts — the app does **not** create them)
+- [ ] Import candidate CSV into Candidates; set Status single-select values
+- [ ] Fill `.env`: `AIRTABLE_API_KEY` (PAT), `AIRTABLE_BASE_ID`, SMTP creds,
+      `APP_SECRET_KEY` (long random), `APP_BASE_URL`, `GOD_EMAIL`, `GOD_PASSWORD`
+- [ ] Verify field names match `AIR`/`AIR_HR`/`AIR_CONTACT` maps in `db.py` (case-sensitive)
 - [ ] `pip install -r requirements.txt && python app.py` (or gunicorn for production)
+
+> Supabase remains an alternative backend: set only `SUPABASE_URL` + `SUPABASE_KEY` and
+> run `schema.sql` in the SQL editor.

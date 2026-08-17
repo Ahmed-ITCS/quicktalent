@@ -12,6 +12,12 @@ class Config:
     SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
     SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 
+    AIRTABLE_API_KEY = os.environ.get("AIRTABLE_API_KEY", "")
+    AIRTABLE_BASE_ID = os.environ.get("AIRTABLE_BASE_ID", "")
+    AIRTABLE_CANDIDATES_TABLE = os.environ.get("AIRTABLE_CANDIDATES_TABLE", "Candidates")
+    AIRTABLE_HR_TABLE = os.environ.get("AIRTABLE_HR_TABLE", "HR Accounts")
+    AIRTABLE_CONTACTS_TABLE = os.environ.get("AIRTABLE_CONTACTS_TABLE", "Contacts")
+
     SMTP_HOST = os.environ.get("SMTP_HOST", "")
     SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
     SMTP_USER = os.environ.get("SMTP_USER", "")
@@ -31,6 +37,18 @@ class Config:
     @property
     def supabase_enabled(self) -> bool:
         return bool(self.SUPABASE_URL and self.SUPABASE_KEY)
+
+    @property
+    def airtable_enabled(self) -> bool:
+        return bool(self.AIRTABLE_API_KEY and self.AIRTABLE_BASE_ID)
+
+    @property
+    def backend_name(self) -> str:
+        if self.supabase_enabled:
+            return "supabase"
+        if self.airtable_enabled:
+            return "airtable"
+        return "local-dev"
 
     def has_god(self) -> bool:
         return bool(self.GOD_EMAIL and self.GOD_PASSWORD)

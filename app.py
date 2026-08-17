@@ -29,7 +29,7 @@ def create_app():
     def inject_globals():
         from auth_utils import current_user, is_admin
 
-        return {"current_user": current_user(), "is_admin": is_admin(), "db_mode": "supabase" if config.supabase_enabled else "local-dev"}
+        return {"current_user": current_user(), "is_admin": is_admin(), "db_mode": config.backend_name}
 
     @app.route("/")
     def landing():
