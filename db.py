@@ -39,36 +39,10 @@ CANDIDATE_FIELDS = {
     "status": ["status", "candidate_status", "employment_status"],
 }
 
-# Airtable canonical field names (see AIRTABLE_SETUP.md)
-AIR = {
-    "name": "Name",
-    "email": "Email",
-    "phone": "Phone",
-    "job_title": "Job Title",
-    "location": "Location",
-    "linkedin_url": "LinkedIn URL",
-    "skills": "Skills",
-    "years_experience": "Years of Experience",
-    "last_employer": "Last Employer",
-    "resume_url": "Resume",
-    "status": "Status",
-}
-AIR_HR = {
-    "email": "Email",
-    "password_hash": "Password Hash",
-    "company_name": "Company Name",
-    "phone": "Phone",
-    "role": "Role",
-    "is_verified": "Verified",
-    "is_blocked": "Blocked",
-    "created_at": "Created At",
-}
-AIR_CONTACT = {
-    "hr_id": "HR ID",
-    "candidate_id": "Candidate ID",
-    "status": "Status",
-    "created_at": "Created At",
-}
+# Airtable canonical field names (override via env, see config.AIR_FIELDS)
+AIR = config.AIR_FIELDS
+AIR_HR = config.AIR_HR_FIELDS
+AIR_CONTACT = config.AIR_CONTACT_FIELDS
 
 DEV_DB_PATH = os.path.join(os.path.dirname(__file__), "var", "dev.db")
 
@@ -467,10 +441,16 @@ class AirtableBackend(_BaseBackend):
             "company_name": f.get(AIR_HR["company_name"], ""),
             "phone": f.get(AIR_HR["phone"]) or "",
             "role": f.get(AIR_HR["role"]) or "hr",
-            "is_verified": bool(f.get(AIR_HR["is_verified"], False)),
-            "is_blocked": bool(f.get(AIR_HR["is_blocked"], False)),
+            "is_verified": self._as_bool(f.get(AIR_HR["is_verified"], False)),
+            "is_blocked": self._as_bool(f.get(AIR_HR["is_blocked"], False)),
             "created_at": _iso(f.get(AIR_HR["created_at"])),
         }
+
+    @staticmethod
+    def _as_bool(value):
+        if isinstance(value, str):
+            return value.strip().lower() in ("1", "true", "yes", "on")
+        return bool(value)
 
     def _contact_from_row(self, rec):
         f = self._fields(rec)
@@ -485,13 +465,12 @@ class AirtableBackend(_BaseBackend):
     @staticmethod
     def _sort(sort):
         mapping = {
-            "newest": [("Created At", False)],
-            "oldest": [("Created At", True)],
-            "name": [(AIR["name"], True)],
-            "exp": [(AIR["years_experience"], True)],
+            "newest": ["-" + config.AIRTABLE_SORT_FIELD],
+            "oldest": [config.AIRTABLE_SORT_FIELD],
+            "name": [AIR["name"]],
+            "exp": ["-" + AIR["years_experience"]],
         }
-        specs = mapping.get(sort, mapping["newest"])
-        return [{"field": f, "direction": "asc" if asc else "desc"} for f, asc in specs]
+        return mapping.get(sort, mapping["newest"])
 
     def _candidate_formula(self, filters):
         f = filters or {}
@@ -521,7 +500,8 @@ class AirtableBackend(_BaseBackend):
                 AIR_HR["role"]: role,
                 AIR_HR["is_verified"]: bool(is_verified),
                 AIR_HR["is_blocked"]: False,
-            }
+            },
+            typecast=True,
         )
         return self._user_from_row(rec)
 
@@ -538,16 +518,32 @@ class AirtableBackend(_BaseBackend):
 
     def update_user(self, user_id, **fields):
         allowed = {"company_name", "phone", "password_hash", "is_verified", "is_blocked", "role"}
-        updates = {
-            AIR_HR[k]: (bool(v) if k in ("is_verified", "is_blocked") else v)
-            for k, v in fields.items()
-            if k in allowed
-        }
+        # Adapt boolean flags to how the base actually stores them
+        # (checkbox True/False, or text/select "1"/"0").
+        flag_style = {}
+        try:
+            existing = self.hr.get(user_id)
+            for logical in ("is_verified", "is_blocked"):
+                raw = (existing.get("fields") or {}).get(AIR_HR[logical])
+                flag_style[logical] = "01" if isinstance(raw, str) else "bool"
+        except Exception:
+            flag_style = {"is_verified": "bool", "is_blocked": "bool"}
+        updates = {}
+        for k, v in fields.items():
+            if k not in allowed:
+                continue
+            if k in ("is_verified", "is_blocked"):
+                v = "1" if bool(v) else "0" if flag_style[k] == "01" else bool(v)
+            updates[AIR_HR[k]] = v
         if updates:
-            self.hr.update(user_id, updates)
+            self.hr.update(user_id, updates, typecast=True)
 
     def list_users(self):
-        return [self._user_from_row(r) for r in self.hr.all(sort=[{"field": "Created At", "direction": "asc"}])]
+        try:
+            rows = self.hr.all(sort=[config.AIRTABLE_SORT_FIELD])
+        except Exception:
+            rows = self.hr.all()
+        return [self._user_from_row(r) for r in rows]
 
     def delete_user(self, user_id):
         self.hr.delete(user_id)
@@ -557,7 +553,12 @@ class AirtableBackend(_BaseBackend):
 
     # ----------------------------------------------------------- candidates
     def search_candidates(self, filters, limit=12, offset=0, sort="newest"):
-        rows = self.candidates.all(formula=self._candidate_formula(filters), sort=self._sort(sort))
+        try:
+            rows = self.candidates.all(formula=self._candidate_formula(filters), sort=self._sort(sort))
+        except Exception:
+            # sort field may not exist in this base — fetch unsorted, sort in memory
+            rows = self.candidates.all(formula=self._candidate_formula(filters))
+            rows.sort(key=lambda r: (r.get("fields") or {}).get(AIR["name"]) or "", reverse=sort == "newest")
         rows = [self.normalize_candidate(r) for r in rows]
         f = filters or {}
         if f.get("skill"):
@@ -573,17 +574,21 @@ class AirtableBackend(_BaseBackend):
             return None
 
     def list_all_candidates(self):
-        return [self.normalize_candidate(r) for r in self.candidates.all(sort=self._sort("newest"))]
+        try:
+            rows = self.candidates.all(sort=self._sort("newest"))
+        except Exception:
+            rows = self.candidates.all()
+        return [self.normalize_candidate(r) for r in rows]
 
     def set_candidate_status(self, candidate_id, status):
         if status in ("available", "employed", "closed"):
-            self.candidates.update(candidate_id, {AIR["status"]: status})
+            self.candidates.update(candidate_id, {AIR["status"]: status}, typecast=True)
 
     def update_candidate(self, candidate_id, **fields):
         allowed = {"name", "email", "phone", "job_title", "location", "linkedin_url", "last_employer"}
         updates = {AIR[k]: fields[k] for k in allowed if fields.get(k) is not None}
         if updates:
-            self.candidates.update(candidate_id, updates)
+            self.candidates.update(candidate_id, updates, typecast=True)
 
     def delete_candidate(self, candidate_id):
         self.candidates.delete(candidate_id)
@@ -631,7 +636,8 @@ class AirtableBackend(_BaseBackend):
                 AIR_CONTACT["hr_id"]: hr_id,
                 AIR_CONTACT["candidate_id"]: candidate_id,
                 AIR_CONTACT["status"]: "requested",
-            }
+            },
+            typecast=True,
         )
         return self._contact_from_row(rec)
 
@@ -650,10 +656,13 @@ class AirtableBackend(_BaseBackend):
         return {r["id"]: self._user_from_row(r) for r in self.hr.all()}
 
     def list_contacts_for_hr(self, hr_id):
-        rows = self.contacts.all(
-            formula=f"{{{AIR_CONTACT['hr_id']}}} = '{self._esc(hr_id)}'",
-            sort=[{"field": "Created At", "direction": "desc"}],
-        )
+        try:
+            rows = self.contacts.all(
+                formula=f"{{{AIR_CONTACT['hr_id']}}} = '{self._esc(hr_id)}'",
+                sort=["-" + config.AIRTABLE_SORT_FIELD],
+            )
+        except Exception:
+            rows = self.contacts.all(formula=f"{{{AIR_CONTACT['hr_id']}}} = '{self._esc(hr_id)}'")
         cands = self._candidates_by_id()
         out = []
         for c in rows:
@@ -662,7 +671,10 @@ class AirtableBackend(_BaseBackend):
         return out
 
     def list_all_contacts(self):
-        rows = self.contacts.all(sort=[{"field": "Created At", "direction": "desc"}])
+        try:
+            rows = self.contacts.all(sort=["-" + config.AIRTABLE_SORT_FIELD])
+        except Exception:
+            rows = self.contacts.all()
         cands = self._candidates_by_id()
         users = self._users_by_id()
         out = []
@@ -679,13 +691,16 @@ class AirtableBackend(_BaseBackend):
 
     def set_contact_status(self, contact_id, status):
         if status in ("requested", "closed"):
-            self.contacts.update(contact_id, {AIR_CONTACT["status"]: status})
+            self.contacts.update(contact_id, {AIR_CONTACT["status"]: status}, typecast=True)
 
     def delete_contact(self, contact_id):
         self.contacts.delete(contact_id)
 
     def count_contacts(self):
-        return len(self.contacts.all(fields=[AIR_CONTACT["status"]], page_size=100))
+        try:
+            return len(self.contacts.all(fields=[AIR_CONTACT["status"]], page_size=100))
+        except Exception:
+            return len(self.contacts.all(page_size=100))
 
     # ------------------------------------------------------------ resume url
     def resume_url(self, candidate):
