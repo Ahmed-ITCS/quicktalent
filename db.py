@@ -414,7 +414,15 @@ class SupabaseBackend(_BaseBackend):
     def ensure_god(self, email, password_hash):
         user = self.get_user_by_email(email)
         if user:
-            return user
+            # keep .env as the source of truth: refresh password + harden flags
+            self.update_user(
+                user["id"],
+                password_hash=password_hash,
+                role="admin",
+                is_verified=True,
+                is_blocked=False,
+            )
+            return self.get_user_by_id(user["id"])
         return self.create_user(email, password_hash, "Platform Admin", "", role="admin", is_verified=True)
 
 
@@ -695,7 +703,15 @@ class AirtableBackend(_BaseBackend):
     def ensure_god(self, email, password_hash):
         user = self.get_user_by_email(email)
         if user:
-            return user
+            # keep .env as the source of truth: refresh password + harden flags
+            self.update_user(
+                user["id"],
+                password_hash=password_hash,
+                role="admin",
+                is_verified=True,
+                is_blocked=False,
+            )
+            return self.get_user_by_id(user["id"])
         return self.create_user(email, password_hash, "Platform Admin", "", role="admin", is_verified=True)
 
 
@@ -1010,7 +1026,15 @@ class SqliteBackend(_BaseBackend):
     def ensure_god(self, email, password_hash):
         user = self.get_user_by_email(email)
         if user:
-            return user
+            # keep .env as the source of truth: refresh password + harden flags
+            self.update_user(
+                user["id"],
+                password_hash=password_hash,
+                role="admin",
+                is_verified=True,
+                is_blocked=False,
+            )
+            return self.get_user_by_id(user["id"])
         return self.create_user(email, password_hash, "Platform Admin", "", role="admin", is_verified=True)
 
 
