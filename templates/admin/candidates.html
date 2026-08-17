@@ -1,0 +1,79 @@
+{% extends "base_app.html" %}
+{% block title %}God Console — All Candidates{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <p class="page-subtitle">Every candidate, full contact info, full control.</p>
+</div>
+
+<div class="table-wrap">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Candidate</th>
+        <th>Role</th>
+        <th>Location</th>
+        <th>Contact</th>
+        <th>Exp</th>
+        <th>Status</th>
+        <th>Contacted by</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in rows %}
+      <tr>
+        <td>
+          <div class="cell-user">
+            <span class="avatar">{{ c.name[:1] | upper }}</span>
+            <div>
+              <strong>{{ c.name }}</strong>
+              {% if c.last_employer %}<small>{{ c.last_employer }}</small>{% endif %}
+            </div>
+          </div>
+        </td>
+        <td>{{ c.job_title or '—' }}</td>
+        <td>{{ c.location or '—' }}</td>
+        <td>
+          <div class="cell-contact">
+            <a href="mailto:{{ c.email }}">{{ c.email }}</a>
+            {% if c.phone %}<a href="tel:{{ c.phone }}">{{ c.phone }}</a>{% endif %}
+          </div>
+        </td>
+        <td>{{ c.years_experience if c.years_experience is not none else '—' }}</td>
+        <td>
+          <form method="post" action="{{ url_for('admin.set_status', candidate_id=c.id) }}">
+            <select name="status" class="status-select" onchange="this.form.submit()">
+              <option value="available" {{ 'selected' if c.status == 'available' }}>Available</option>
+              <option value="employed" {{ 'selected' if c.status == 'employed' }}>Employed</option>
+              <option value="closed" {{ 'selected' if c.status == 'closed' }}>Closed</option>
+            </select>
+          </form>
+        </td>
+        <td>{% if counts.get(c.id) %}<span class="badge badge-indigo">{{ counts[c.id] }}×</span>{% else %}—{% endif %}</td>
+        <td class="table-actions">
+          <details class="manage-details">
+            <summary class="btn btn-outline btn-sm">Manage</summary>
+            <div class="manage-popover">
+              <form method="post" action="{{ url_for('admin.edit_candidate', candidate_id=c.id) }}" class="form">
+                <div class="field"><label>Name</label><input name="name" value="{{ c.name }}" required></div>
+                <div class="field"><label>Email</label><input name="email" type="email" value="{{ c.email or '' }}"></div>
+                <div class="field"><label>Phone</label><input name="phone" value="{{ c.phone or '' }}"></div>
+                <div class="field"><label>Job title</label><input name="job_title" value="{{ c.job_title or '' }}"></div>
+                <div class="field"><label>Location</label><input name="location" value="{{ c.location or '' }}"></div>
+                <div class="field"><label>LinkedIn</label><input name="linkedin_url" value="{{ c.linkedin_url or '' }}"></div>
+                <div class="field"><label>Last employer</label><input name="last_employer" value="{{ c.last_employer or '' }}"></div>
+                <button class="btn btn-primary btn-sm btn-block" type="submit">Save edits</button>
+              </form>
+              <form method="post" action="{{ url_for('admin.delete_candidate', candidate_id=c.id) }}" onsubmit="return confirmDelete('Delete {{ c.name }}? This cannot be undone.');">
+                <button class="btn btn-danger btn-sm btn-block" type="submit">Delete profile</button>
+              </form>
+            </div>
+          </details>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

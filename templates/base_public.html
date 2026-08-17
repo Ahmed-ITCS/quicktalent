@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}QuickTalent{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body class="public-body">
+  <header class="nav">
+    <a href="{{ url_for('landing') }}" class="brand">
+      <span class="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0zM4 21c0-3.5 3.6-5.5 8-5.5s8 2 8 5.5"/></svg>
+      </span>
+      <span class="brand-name">QuickTalent</span>
+    </a>
+    <nav class="nav-links">
+      <a href="{{ url_for('landing') }}" class="{{ 'active' if request.endpoint == 'landing' else '' }}">Home</a>
+      <a href="{{ url_for('auth.login') }}">For HR</a>
+    </nav>
+    <div class="nav-actions">
+      {% if current_user %}
+        {% if is_admin %}
+          <a class="btn btn-primary btn-sm" href="{{ url_for('admin.overview') }}">Console</a>
+        {% else %}
+          <a class="btn btn-primary btn-sm" href="{{ url_for('hr.browse') }}">Dashboard</a>
+        {% endif %}
+        <a class="btn btn-ghost btn-sm" href="{{ url_for('auth.logout') }}">Log out</a>
+      {% else %}
+        <a class="btn btn-ghost btn-sm" href="{{ url_for('auth.login') }}">Sign in</a>
+        <a class="btn btn-primary btn-sm" href="{{ url_for('auth.register') }}">Get started</a>
+      {% endif %}
+    </div>
+  </header>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flash-wrap">
+        {% for category, message in messages %}
+          <div class="flash flash-{{ category }}">{{ message }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <main>{% block content %}{% endblock %}</main>
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,67 @@
+{% extends "base_app.html" %}
+{% block title %}My Contacts — QuickTalent{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>My Contacts</h1>
+    <p class="page-subtitle">{{ items | length }} candidate{{ '' if items | length == 1 else 's' }} you've contacted — emails and phones unlocked.</p>
+  </div>
+</div>
+
+{% if not items %}
+  <div class="empty-state">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    <h3>No contacts yet</h3>
+    <p>Browse candidates and press <strong>Contact</strong> — they'll get notified and you'll unlock their details.</p>
+    <a class="btn btn-primary" href="{{ url_for('hr.browse') }}">Browse candidates</a>
+  </div>
+{% endif %}
+
+<div class="table-wrap">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Candidate</th>
+        <th>Role</th>
+        <th>Email</th>
+        <th>Phone</th>
+        <th>Connected</th>
+        <th>Status</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+      {% set c = item.candidate %}
+      <tr>
+        <td>
+          <div class="cell-user">
+            <span class="avatar">{{ c.name[:1] | upper }}</span>
+            <div>
+              <strong><a href="{{ url_for('hr.candidate_detail', candidate_id=c.id) }}">{{ c.name }}</a></strong>
+              {% if c.last_employer %}<small>{{ c.last_employer }}</small>{% endif %}
+            </div>
+          </div>
+        </td>
+        <td>{{ c.job_title or '—' }}</td>
+        <td><a class="unlock-link" href="mailto:{{ c.email }}">{{ c.email }}</a></td>
+        <td>{% if c.phone %}<a class="unlock-link" href="tel:{{ c.phone }}">{{ c.phone }}</a>{% else %}—{% endif %}</td>
+        <td class="nowrap">{{ item.contact.created_at[:10] if item.contact.created_at else '—' }}</td>
+        <td><span class="status-badge status-{{ c.status }}">{{ c.status | capitalize }}</span></td>
+        <td class="table-actions">
+          <form method="post" action="{{ url_for('hr.set_candidate_status', contact_id=item.contact.id) }}">
+            <select name="status" class="status-select" onchange="this.form.submit()">
+              <option value="available" {{ 'selected' if c.status == 'available' }}>Available</option>
+              <option value="employed" {{ 'selected' if c.status == 'employed' }}>Employed</option>
+              <option value="closed" {{ 'selected' if c.status == 'closed' }}>Closed</option>
+            </select>
+            <noscript><button class="btn btn-outline btn-sm" type="submit">Save</button></noscript>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

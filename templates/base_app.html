@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}QuickTalent{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body class="app-body">
+  <header class="nav app-nav">
+    <a href="{{ url_for('landing') }}" class="brand">
+      <span class="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0zM4 21c0-3.5 3.6-5.5 8-5.5s8 2 8 5.5"/></svg>
+      </span>
+      <span class="brand-name">QuickTalent</span>
+    </a>
+
+    <nav class="nav-links" id="appNav">
+      <a href="{{ url_for('hr.browse') }}" class="{{ 'active' if request.endpoint in ('hr.browse', 'hr.candidate_detail') else '' }}">Candidates</a>
+      <a href="{{ url_for('hr.contacts') }}" class="{{ 'active' if request.endpoint == 'hr.contacts' else '' }}">My Contacts</a>
+      <a href="{{ url_for('hr.settings') }}" class="{{ 'active' if request.endpoint in ('hr.settings', 'hr.change_password') else '' }}">Settings</a>
+      {% if is_admin %}
+        <span class="badge badge-admin">God</span>
+        <a href="{{ url_for('admin.overview') }}" class="{{ 'active' if request.endpoint == 'admin.overview' else '' }}">Overview</a>
+        <a href="{{ url_for('admin.candidates') }}" class="{{ 'active' if request.endpoint == 'admin.candidates' else '' }}">All Candidates</a>
+        <a href="{{ url_for('admin.hr_accounts') }}" class="{{ 'active' if request.endpoint == 'admin.hr_accounts' else '' }}">HR Accounts</a>
+        <a href="{{ url_for('admin.contacts') }}" class="{{ 'active' if request.endpoint == 'admin.contacts' else '' }}">All Contacts</a>
+      {% endif %}
+    </nav>
+
+    <div class="nav-actions">
+      {% if db_mode == 'local-dev' %}
+        <span class="badge badge-dev">local-dev</span>
+      {% endif %}
+      <div class="user-chip">
+        <span class="avatar">{{ current_user.company_name[:1] | upper }}</span>
+        <div class="user-meta">
+          <strong>{{ current_user.company_name }}</strong>
+          <small>{{ 'God Admin' if is_admin else current_user.email }}</small>
+        </div>
+      </div>
+      <a class="btn btn-outline btn-sm" href="{{ url_for('auth.logout') }}">Log out</a>
+      <button class="icon-btn nav-toggle" id="navToggle" aria-label="Toggle menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+      </button>
+    </div>
+  </header>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flash-wrap">
+        {% for category, message in messages %}
+          <div class="flash flash-{{ category }}">{{ message }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <main class="app-main">
+    <div class="page">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

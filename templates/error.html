@@ -1,0 +1,12 @@
+{% extends "base_public.html" %}
+{% block title %}{{ code }} — QuickTalent{% endblock %}
+{% block content %}
+<div class="auth-page">
+  <div class="auth-card auth-card-center">
+    <span class="error-orb">{{ code }}</span>
+    <h1>{{ code }}</h1>
+    <p>{{ message }}</p>
+    <a class="btn btn-primary btn-block" href="{{ url_for('landing') }}">Back to home</a>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,58 @@
+{% extends "base_app.html" %}
+{% block title %}God Console — All Contacts{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <p class="page-subtitle">Full connection matrix — who reached out to whom.</p>
+</div>
+
+{% if not items %}
+  <div class="empty-state">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    <h3>No connections yet</h3>
+    <p>When HR teams contact candidates, the connection shows up here.</p>
+  </div>
+{% endif %}
+
+<div class="table-wrap">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Company</th>
+        <th>Company contact</th>
+        <th>Candidate</th>
+        <th>Candidate contact</th>
+        <th>Connected</th>
+        <th>Status</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+      <tr>
+        <td><strong>{{ item.hr.company_name if item.hr else '—' }}</strong></td>
+        <td>
+          <div class="cell-contact">
+            {% if item.hr %}<a href="mailto:{{ item.hr.email }}">{{ item.hr.email }}</a>{% if item.hr.phone %}<a href="tel:{{ item.hr.phone }}">{{ item.hr.phone }}</a>{% endif %}{% endif %}
+          </div>
+        </td>
+        <td><strong>{{ item.candidate.name }}</strong></td>
+        <td>
+          <div class="cell-contact">
+            <a href="mailto:{{ item.candidate.email }}">{{ item.candidate.email }}</a>
+            {% if item.candidate.phone %}<a href="tel:{{ item.candidate.phone }}">{{ item.candidate.phone }}</a>{% endif %}
+          </div>
+        </td>
+        <td class="nowrap">{{ item.contact.created_at[:10] if item.contact.created_at else '—' }}</td>
+        <td><span class="status-badge status-{{ item.candidate.status }}">{{ item.candidate.status | capitalize }}</span></td>
+        <td class="table-actions">
+          <form method="post" action="{{ url_for('admin.delete_contact', contact_id=item.contact.id) }}" onsubmit="return confirmDelete('Delete this connection record?');">
+            <button class="btn btn-danger btn-sm" type="submit">Delete</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -1,0 +1,63 @@
+{% extends "base_app.html" %}
+{% block title %}God Console — HR Accounts{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <p class="page-subtitle">Verify, block, or remove companies from the network.</p>
+</div>
+
+<div class="table-wrap">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Company</th>
+        <th>Contact</th>
+        <th>Verified</th>
+        <th>Status</th>
+        <th>Contacts made</th>
+        <th>Joined</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for u in users %}
+      <tr class="{{ 'row-admin' if u.role == 'admin' else '' }}">
+        <td>
+          <div class="cell-user">
+            <span class="avatar {{ 'avatar-admin' if u.role == 'admin' }}">{{ u.company_name[:1] | upper }}</span>
+            <div>
+              <strong>{{ u.company_name }} {% if u.role == 'admin' %}<span class="badge badge-admin">God</span>{% endif %}</strong>
+            </div>
+          </div>
+        </td>
+        <td>
+          <div class="cell-contact">
+            <a href="mailto:{{ u.email }}">{{ u.email }}</a>
+            {% if u.phone %}<a href="tel:{{ u.phone }}">{{ u.phone }}</a>{% endif %}
+          </div>
+        </td>
+        <td>{% if u.is_verified %}<span class="badge badge-success">Verified</span>{% else %}<span class="badge badge-warn">Pending</span>{% endif %}</td>
+        <td>{% if u.is_blocked %}<span class="badge badge-danger">Blocked</span>{% else %}<span class="badge badge-success">Active</span>{% endif %}</td>
+        <td>{{ counts.get(u.id, 0) }}</td>
+        <td class="nowrap">{{ u.created_at[:10] if u.created_at else '—' }}</td>
+        <td class="table-actions">
+          {% if u.role != 'admin' %}
+          <form method="post" action="{{ url_for('admin.hr_action', user_id=u.id) }}" class="inline-actions">
+            {% if not u.is_verified %}<button name="action" value="verify" class="btn btn-success btn-sm">Verify</button>{% endif %}
+            {% if u.is_blocked %}
+              <button name="action" value="unblock" class="btn btn-outline btn-sm">Unblock</button>
+            {% else %}
+              <button name="action" value="block" class="btn btn-warn btn-sm">Block</button>
+            {% endif %}
+            <button name="action" value="delete" class="btn btn-danger btn-sm" onclick="return confirmDelete('Delete {{ u.email }}? This removes their account and contacts.')">Delete</button>
+          </form>
+          {% else %}
+          <span class="muted">Protected</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

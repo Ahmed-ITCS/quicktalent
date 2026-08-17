@@ -1,0 +1,151 @@
+{% extends "base_public.html" %}
+{% block title %}QuickTalent — Connect with top talent{% endblock %}
+{% block content %}
+
+<section class="hero">
+  <div class="hero-grid">
+    <div class="hero-copy">
+      <span class="eyebrow">Talent network for professionals</span>
+      <h1>Hire good people.<br><em>Give great people a second chance.</em></h1>
+      <p class="hero-sub">A private platform where HR teams discover laid-off professionals, connect with full transparency, and bring skilled people back to work — faster.</p>
+      <div class="hero-cta">
+        <a href="{{ url_for('auth.register') }}" class="btn btn-primary btn-lg">Get started — free</a>
+        <a href="{{ url_for('auth.login') }}" class="btn btn-outline btn-lg">I'm an HR team</a>
+      </div>
+      {% if stats %}
+      <div class="hero-proof">
+        <div class="hero-proof-item"><strong>{{ stats.candidates }}</strong><span>Professionals</span></div>
+        <span class="hero-proof-sep"></span>
+        <div class="hero-proof-item"><strong>{{ stats.hrs }}</strong><span>Companies</span></div>
+        <span class="hero-proof-sep"></span>
+        <div class="hero-proof-item"><strong>{{ stats.contacts }}</strong><span>Connections</span></div>
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="preview" aria-hidden="true">
+      <div class="preview-card">
+        <div class="preview-card-head">
+          <span class="avatar avatar-lg">A</span>
+          <div>
+            <h4>Great people, waiting to be found</h4>
+            <p>Contact info unlocks when you reach out</p>
+          </div>
+        </div>
+        <div class="preview-row">
+          <span class="avatar">A</span>
+          <div class="preview-row-meta">
+            <strong>Aisha Rahman</strong>
+            <span>Senior React Engineer · San Francisco</span>
+          </div>
+          <span class="mask">ai***@gmail.com</span>
+          <span class="btn btn-primary">Contact</span>
+        </div>
+        <div class="preview-row">
+          <span class="avatar">M</span>
+          <div class="preview-row-meta">
+            <strong>Marcus Chen</strong>
+            <span>Staff Product Designer · Seattle</span>
+          </div>
+          <span class="mask">ma***@outlook.com</span>
+          <span class="btn btn-primary">Contact</span>
+        </div>
+        <div class="preview-row">
+          <span class="avatar">P</span>
+          <div class="preview-row-meta">
+            <strong>Priya Patel</strong>
+            <span>Backend Engineer · Chicago</span>
+          </div>
+          <span class="mask">pr***@gmail.com</span>
+          <span class="btn btn-primary">Contact</span>
+        </div>
+        <div class="preview-card-footer">Skills, experience &amp; resumes visible — contacts stay private until interest is mutual.</div>
+      </div>
+      <div class="preview-toast">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/></svg>
+        Candidate notified — contact details unlocked
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">How it works</span>
+      <h2>From discovery to hire in three steps</h2>
+      <p>Built around one simple idea: trust first, details after.</p>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <span class="step-num">01</span>
+        <h3>Discover talent</h3>
+        <p>Browse vetted, laid-off professionals. Filter by role, location, skills and experience. Resumes included.</p>
+      </div>
+      <div class="step">
+        <span class="step-num">02</span>
+        <h3>Reach out securely</h3>
+        <p>Contact info is private until you're interested. Press contact — the candidate is notified by email and both sides connect.</p>
+      </div>
+      <div class="step">
+        <span class="step-num">03</span>
+        <h3>Hire &amp; close</h3>
+        <p>Track your contacted candidates, mark hires as employed, and keep the network current for everyone.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section section-alt">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">Why QuickTalent</span>
+      <h2>Privacy first, by design</h2>
+      <p>We built trust into every step of the hiring flow.</p>
+    </div>
+    <div class="feature-grid">
+      <div class="feature-item">
+        <span class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        </span>
+        <h4>Contact details stay hidden</h4>
+        <p>Emails and phones are masked until a connection is requested by either side.</p>
+      </div>
+      <div class="feature-item">
+        <span class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/></svg>
+        </span>
+        <h4>Verified companies</h4>
+        <p>Every HR account is email-verified, and admins keep the network clean.</p>
+      </div>
+      <div class="feature-item">
+        <span class="feature-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
+        </span>
+        <h4>Resumes included</h4>
+        <p>View and download resumes right from the candidate's profile.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="cta-box">
+    <h2>Ready to bring great people back?</h2>
+    <p>Join companies already using QuickTalent to rebuild their teams.</p>
+    <a href="{{ url_for('auth.register') }}" class="btn btn-light btn-lg">Create your company account</a>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="footer-inner">
+    <span class="brand">
+      <span class="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0zM4 21c0-3.5 3.6-5.5 8-5.5s8 2 8 5.5"/></svg>
+      </span>
+      <span class="brand-name">QuickTalent</span>
+    </span>
+    <p class="footer-note">Talent deserves a second chance. Companies deserve great people.</p>
+  </div>
+</footer>
+{% endblock %}

@@ -1,0 +1,48 @@
+{% extends "base_app.html" %}
+{% block title %}Settings — QuickTalent{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>Settings</h1>
+    <p class="page-subtitle">Your company profile and account security.</p>
+  </div>
+</div>
+
+<div class="settings-grid">
+  <div class="panel">
+    <h2 class="panel-title">Company profile</h2>
+    <form method="post" action="{{ url_for('hr.settings') }}" class="form">
+      <div class="field">
+        <label for="company_name">Company name</label>
+        <input id="company_name" name="company_name" type="text" required value="{{ user.company_name }}">
+      </div>
+      <div class="field">
+        <label for="phone">Phone number</label>
+        <input id="phone" name="phone" type="tel" required value="{{ user.phone }}">
+      </div>
+      <div class="field">
+        <label for="email">Account email</label>
+        <input id="email" type="email" value="{{ user.email }}" disabled class="input-disabled">
+        <p class="field-hint">Email is your login and the address candidates reply to.</p>
+      </div>
+      <button class="btn btn-primary" type="submit">Save changes</button>
+    </form>
+  </div>
+
+  <div class="panel">
+    <h2 class="panel-title">Change password</h2>
+    <form method="post" action="{{ url_for('hr.change_password') }}" class="form">
+      <div class="field">
+        <label for="old_password">Current password</label>
+        <input id="old_password" name="old_password" type="password" required>
+      </div>
+      <div class="field">
+        <label for="new_password">New password</label>
+        <input id="new_password" name="new_password" type="password" required minlength="8">
+      </div>
+      <button class="btn btn-outline" type="submit">Update password</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

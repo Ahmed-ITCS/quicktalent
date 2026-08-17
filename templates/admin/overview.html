@@ -1,0 +1,80 @@
+{% extends "base_app.html" %}
+{% block title %}God Console — Overview{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>God Console</h1>
+    <p class="page-subtitle">Everything across the network, at a glance.</p>
+  </div>
+</div>
+
+<div class="stat-strip">
+  <div class="stat-card">
+    <span class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></span>
+    <strong>{{ stats.candidates_total }}</strong><span>Total candidates</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg></span>
+    <strong>{{ stats.available }}</strong><span>Available</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg></span>
+    <strong>{{ stats.employed }}</strong><span>Employed</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.3 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.7 3.86a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg></span>
+    <strong>{{ stats.closed }}</strong><span>Closed</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg></span>
+    <strong>{{ stats.hr_total }}</strong><span>HR companies</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
+    <strong>{{ stats.contacts_total }}</strong><span>Connections</span>
+  </div>
+</div>
+
+<div class="admin-grid">
+  <div class="panel">
+    <h2 class="panel-title">Recent connections</h2>
+    {% if recent_contacts %}
+    <div class="table-wrap">
+      <table class="table table-compact">
+        <thead><tr><th>Company</th><th>Candidate</th><th>When</th></tr></thead>
+        <tbody>
+          {% for item in recent_contacts %}
+          <tr>
+            <td>{{ item.hr.company_name if item.hr else '—' }}</td>
+            <td>{{ item.candidate.name }}</td>
+            <td class="nowrap">{{ item.contact.created_at[:10] if item.contact.created_at else '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}<p class="muted">No connections yet.</p>{% endif %}
+  </div>
+
+  <div class="panel">
+    <h2 class="panel-title">Latest candidates</h2>
+    {% if recent_candidates %}
+    <div class="table-wrap">
+      <table class="table table-compact">
+        <thead><tr><th>Name</th><th>Role</th><th>Status</th></tr></thead>
+        <tbody>
+          {% for c in recent_candidates %}
+          <tr>
+            <td>{{ c.name }}</td>
+            <td>{{ c.job_title or '—' }}</td>
+            <td><span class="status-badge status-{{ c.status }}">{{ c.status | capitalize }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}<p class="muted">No candidates yet.</p>{% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,92 @@
+{% extends "base_app.html" %}
+{% block title %}{{ candidate.name }} — QuickTalent{% endblock %}
+{% block content %}
+
+<div class="profile">
+  <div class="profile-hero">
+    <span class="avatar avatar-xl">{{ candidate.name[:1] | upper }}</span>
+    <div class="profile-hero-meta">
+      <div class="profile-name-row">
+        <h1>{{ candidate.name }}</h1>
+        <span class="status-badge status-{{ candidate.status }}">{{ candidate.status | capitalize }}</span>
+      </div>
+      <p class="profile-title">{{ candidate.job_title or 'Open to opportunities' }}</p>
+      <div class="candidate-meta">
+        {% if candidate.location %}<span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>{{ candidate.location }}</span>{% endif %}
+        {% if candidate.years_experience is not none %}<span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>{{ candidate.years_experience }} yrs experience</span>{% endif %}
+        {% if candidate.last_employer %}<span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>Last: {{ candidate.last_employer }}</span>{% endif %}
+      </div>
+    </div>
+    <div class="profile-hero-actions">
+      {% if contact %}
+        <span class="btn btn-success">✓ In your contacts</span>
+      {% elif candidate.status == 'available' %}
+        <form method="post" action="{{ url_for('hr.contact', candidate_id=candidate.id) }}">
+          <button class="btn btn-primary btn-lg" type="submit">Contact this person</button>
+        </form>
+        <p class="contact-hint">They'll be notified by email with your company details.</p>
+      {% else %}
+        <span class="btn btn-disabled btn-lg">Profile {{ candidate.status }}</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="profile-grid">
+    <div class="panel">
+      <h2 class="panel-title">Skills &amp; technologies</h2>
+      <div class="skill-chips skill-chips-lg">
+        {% for s in candidate.skills %}<span class="chip">{{ s }}</span>{% else %}
+        <p class="muted">No skills listed.</p>{% endfor %}
+      </div>
+
+      <h2 class="panel-title">About</h2>
+      <dl class="detail-list">
+        {% if candidate.location %}<div><dt>Location</dt><dd>{{ candidate.location }}</dd></div>{% endif %}
+        {% if candidate.years_experience is not none %}<div><dt>Experience</dt><dd>{{ candidate.years_experience }} years</dd></div>{% endif %}
+        {% if candidate.last_employer %}<div><dt>Last employer</dt><dd>{{ candidate.last_employer }}</dd></div>{% endif %}
+        {% if candidate.linkedin_url %}
+          <div><dt>LinkedIn</dt><dd><a href="{{ candidate.linkedin_url }}" target="_blank" rel="noopener">{{ candidate.linkedin_url | truncate(40) }}</a></dd></div>
+        {% endif %}
+        <div><dt>Status</dt><dd><span class="status-badge status-{{ candidate.status }}">{{ candidate.status | capitalize }}</span></dd></div>
+      </dl>
+
+      {% if resume %}
+      <a class="btn btn-outline btn-block" href="{{ resume }}" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+        Download resume
+      </a>
+      {% else %}
+      <p class="muted">No resume uploaded for this profile.</p>
+      {% endif %}
+    </div>
+
+    <div class="panel">
+      <h2 class="panel-title">Contact details</h2>
+      {% if contact %}
+        <div class="unlocked-box">
+          <p class="unlocked-note">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            Contact unlocked — reach out directly.
+          </p>
+          <div class="contact-reveal">
+            <div><span class="contact-label">Email</span><a href="mailto:{{ candidate.email }}">{{ candidate.email }}</a></div>
+            {% if candidate.phone %}<div><span class="contact-label">Phone</span><a href="tel:{{ candidate.phone }}">{{ candidate.phone }}</a></div>{% endif %}
+            {% if candidate.linkedin_url %}<div><span class="contact-label">LinkedIn</span><a href="{{ candidate.linkedin_url }}" target="_blank" rel="noopener">{{ candidate.linkedin_url | truncate(45) }}</a></div>{% endif %}
+          </div>
+          <p class="muted">Connected since {{ contact.created_at[:10] if contact.created_at else '—' }}</p>
+        </div>
+      {% else %}
+        <div class="locked-box">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          <h3>Contact details are private</h3>
+          <p>Press <strong>Contact this person</strong> and both sides will see each other's email and phone.</p>
+          <p class="masked-preview">
+            <span>{{ mask_email(candidate.email) }}</span>
+            {% if candidate.phone %}<span>{{ mask_phone(candidate.phone) }}</span>{% endif %}
+          </p>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

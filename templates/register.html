@@ -1,0 +1,32 @@
+{% extends "base_public.html" %}
+{% block title %}Create an account — QuickTalent{% endblock %}
+{% block content %}
+<div class="auth-page">
+  <div class="auth-card">
+    <div class="auth-head">
+      <h1>Create your company account</h1>
+      <p>Join the network and start discovering talent today.</p>
+    </div>
+    <form method="post" class="form">
+      <div class="field">
+        <label for="company_name">Company name</label>
+        <input id="company_name" name="company_name" type="text" placeholder="Acme Inc." required value="{{ form.company_name or '' }}">
+      </div>
+      <div class="field">
+        <label for="email">Work email</label>
+        <input id="email" name="email" type="email" placeholder="you@company.com" required value="{{ form.email or '' }}">
+      </div>
+      <div class="field">
+        <label for="phone">Phone number</label>
+        <input id="phone" name="phone" type="tel" placeholder="+1 555 000 0000" required value="{{ form.phone or '' }}">
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" placeholder="At least 8 characters" required minlength="8">
+      </div>
+      <button class="btn btn-primary btn-block btn-lg" type="submit">Create account</button>
+    </form>
+    <p class="auth-switch">Already have an account? <a href="{{ url_for('auth.login') }}">Sign in</a></p>
+  </div>
+</div>
+{% endblock %}

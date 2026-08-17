@@ -1,0 +1,118 @@
+{% extends "base_app.html" %}
+{% block title %}Candidates — QuickTalent{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <h1>Candidates</h1>
+    <p class="page-subtitle">{{ total }} professional{{ '' if total == 1 else 's' }} ready for their next opportunity</p>
+  </div>
+</div>
+
+<form class="filter-bar" method="get" action="{{ url_for('hr.browse') }}">
+  <div class="filter-row">
+    <div class="field field-search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <input name="q" type="text" placeholder="Search by name…" value="{{ filters.q }}">
+    </div>
+    <div class="field">
+      <select name="job_title">
+        <option value="">All roles</option>
+        {% for t in job_titles %}<option value="{{ t }}" {{ 'selected' if filters.job_title == t }}>{{ t }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <select name="city">
+        <option value="">All locations</option>
+        {% for c in cities %}<option value="{{ c }}" {{ 'selected' if filters.city == c }}>{{ c }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <input name="skill" type="text" placeholder="Skill (e.g. React)" value="{{ filters.skill }}">
+    </div>
+    <div class="field field-narrow">
+      <input name="min_years" type="number" min="0" max="50" placeholder="Min yrs" value="{{ filters.min_years if filters.min_years is not none }}">
+    </div>
+    <div class="field field-narrow">
+      <input name="max_years" type="number" min="0" max="50" placeholder="Max yrs" value="{{ filters.max_years if filters.max_years is not none }}">
+    </div>
+    <div class="field">
+      <select name="status">
+        <option value="">Any status</option>
+        <option value="available" {{ 'selected' if filters.status == 'available' }}>Available</option>
+        <option value="employed" {{ 'selected' if filters.status == 'employed' }}>Employed</option>
+        <option value="closed" {{ 'selected' if filters.status == 'closed' }}>Closed</option>
+      </select>
+    </div>
+    <div class="field">
+      <select name="sort">
+        <option value="newest" {{ 'selected' if sort == 'newest' }}>Newest</option>
+        <option value="oldest" {{ 'selected' if sort == 'oldest' }}>Oldest</option>
+        <option value="name" {{ 'selected' if sort == 'name' }}>Name A–Z</option>
+        <option value="exp" {{ 'selected' if sort == 'exp' }}>Most exp</option>
+      </select>
+    </div>
+    <button class="btn btn-primary" type="submit">Apply</button>
+    <a class="btn btn-ghost" href="{{ url_for('hr.browse') }}">Reset</a>
+  </div>
+</form>
+
+{% if not rows %}
+  <div class="empty-state">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3M8 11h6"/></svg>
+    <h3>No candidates match your filters</h3>
+    <p>Try widening your search criteria.</p>
+    <a class="btn btn-outline" href="{{ url_for('hr.browse') }}">Clear filters</a>
+  </div>
+{% endif %}
+
+<div class="cand-list">
+  {% for c in rows %}
+  <article class="cand-row {{ 'is-contacted' if c.id in my_contacts else '' }}">
+    <span class="avatar avatar-lg">{{ c.name[:1] | upper }}</span>
+    <div class="cand-main">
+      <div class="cand-top">
+        <a class="cand-name" href="{{ url_for('hr.candidate_detail', candidate_id=c.id) }}">{{ c.name }}</a>
+        <span class="status-pill status-{{ c.status }}"><i></i>{{ c.status }}</span>
+      </div>
+      <div class="cand-role">{{ c.job_title or 'Open to opportunities' }}</div>
+      <div class="cand-tags">
+        {% if c.location %}<span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>{{ c.location }}</span>{% endif %}
+        {% if c.years_experience is not none %}<span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>{{ c.years_experience }} yrs</span>{% endif %}
+        {% if c.last_employer %}<span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>{{ c.last_employer }}</span>{% endif %}
+        <span class="cand-skills">
+          {% for s in c.skills[:3] %}<span class="chip">{{ s }}</span>{% endfor %}
+          {% if c.skills | length > 3 %}<span class="chip chip-more">+{{ c.skills | length - 3 }}</span>{% endif %}
+        </span>
+      </div>
+    </div>
+    <div class="cand-side">
+      <div class="cand-masked">
+        <div class="mask-email">{{ mask_email(c.email) }}</div>
+        {% if c.phone %}<div class="mask-phone">{{ mask_phone(c.phone) }}</div>{% endif %}
+      </div>
+      <div class="cand-actions">
+        {% if c.id in my_contacts %}
+          <span class="btn btn-success btn-sm" title="Contact unlocked">✓ Contacted</span>
+        {% elif c.status == 'available' %}
+          <form method="post" action="{{ url_for('hr.contact', candidate_id=c.id) }}">
+            <button class="btn btn-primary btn-sm" type="submit">Contact</button>
+          </form>
+        {% else %}
+          <span class="btn btn-disabled btn-sm">Unavailable</span>
+        {% endif %}
+        <a class="btn btn-outline btn-sm" href="{{ url_for('hr.candidate_detail', candidate_id=c.id) }}">View</a>
+      </div>
+    </div>
+  </article>
+  {% endfor %}
+</div>
+
+{% if pages > 1 %}
+<nav class="pagination">
+  {% if page > 1 %}<a class="btn btn-outline btn-sm" href="{{ url_for('hr.browse', page=page-1, **request.args) }}">← Prev</a>{% endif %}
+  <span class="page-info">Page {{ page }} of {{ pages }}</span>
+  {% if page < pages %}<a class="btn btn-outline btn-sm" href="{{ url_for('hr.browse', page=page+1, **request.args) }}">Next →</a>{% endif %}
+</nav>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,14 @@
+{% extends "base_public.html" %}
+{% block title %}Check your email — QuickTalent{% endblock %}
+{% block content %}
+<div class="auth-page">
+  <div class="auth-card auth-card-center">
+    <span class="success-orb">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/></svg>
+    </span>
+    <h1>Check your inbox</h1>
+    <p>We sent a verification link to <strong>{{ email }}</strong>. Click the link in the email to activate your account.</p>
+    <a class="btn btn-outline btn-block" href="{{ url_for('auth.login') }}">Go to sign in</a>
+  </div>
+</div>
+{% endblock %}
