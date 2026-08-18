@@ -8,14 +8,22 @@ from flask import (
     url_for,
 )
 
+import os
 import db as database
 from auth_utils import current_user, hash_password, login_required, make_approval_token, mask_email, mask_phone, verify_password
-from config import config
 from email_service import send_contact_email, send_status_email
 
 bp = Blueprint("hr", __name__)
 
 PER_PAGE = 12
+
+
+def _approval_base():
+    explicit = os.environ.get("APP_BASE_URL", "").strip().rstrip("/")
+    if explicit:
+        return explicit
+    proto = request.headers.get("X-Forwarded-Proto") or request.scheme
+    return f"{proto}://{request.host}".rstrip("/")
 
 
 def _filters_from_args():
@@ -123,7 +131,7 @@ def contact(candidate_id):
                 candidate_email=candidate["email"],
                 hr=user,
                 job_title=candidate["job_title"],
-                approval_url=f"{config.APP_BASE_URL}/contact-requests/{token}",
+                approval_url=f"{_approval_base()}/contact-requests/{token}",
             )
     else:
         flash("You already have this candidate in your contacts.", "info")
@@ -153,7 +161,7 @@ def resend_contact_request(contact_id):
                 candidate_email=item["candidate"]["email"],
                 hr=user,
                 job_title=item["candidate"]["job_title"],
-                approval_url=f"{config.APP_BASE_URL}/contact-requests/{token}",
+                approval_url=f"{_approval_base()}/contact-requests/{token}",
             )
             flash(f"Request re-sent to {item['candidate']['name']}.", "success")
         else:
