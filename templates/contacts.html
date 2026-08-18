@@ -5,7 +5,7 @@
 <div class="page-head">
   <div>
     <h1>My Contacts</h1>
-    <p class="page-subtitle">{{ items | length }} candidate{{ '' if items | length == 1 else 's' }} you've contacted — emails and phones unlocked.</p>
+    <p class="page-subtitle">{{ items | length }} candidate{{ '' if items | length == 1 else 's' }} you've contacted — details unlock once each candidate approves.</p>
   </div>
 </div>
 
@@ -13,7 +13,7 @@
   <div class="empty-state">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
     <h3>No contacts yet</h3>
-    <p>Browse candidates and press <strong>Contact</strong> — they'll get notified and you'll unlock their details.</p>
+    <p>Browse candidates and press <strong>Contact</strong> — they'll approve via email before you unlock their details.</p>
     <a class="btn btn-primary" href="{{ url_for('hr.browse') }}">Browse candidates</a>
   </div>
 {% endif %}
@@ -26,6 +26,7 @@
         <th>Role</th>
         <th>Email</th>
         <th>Phone</th>
+        <th>Approval</th>
         <th>Connected</th>
         <th>Status</th>
         <th></th>
@@ -34,6 +35,8 @@
     <tbody>
       {% for item in items %}
       {% set c = item.candidate %}
+      {% set approved = item.contact.status == 'approved' %}
+      {% set declined = item.contact.status == 'declined' %}
       <tr>
         <td>
           <div class="cell-user">
@@ -45,11 +48,32 @@
           </div>
         </td>
         <td>{{ c.job_title or '—' }}</td>
-        <td><a class="unlock-link" href="mailto:{{ c.email }}">{{ c.email }}</a></td>
-        <td>{% if c.phone %}<a class="unlock-link" href="tel:{{ c.phone }}">{{ c.phone }}</a>{% else %}—{% endif %}</td>
+        <td>
+          {% if approved %}<a class="unlock-link" href="mailto:{{ c.email }}">{{ c.email }}</a>
+          {% else %}<span class="muted">{{ mask_email(c.email) }}</span>{% endif %}
+        </td>
+        <td>
+          {% if approved and c.phone %}<a class="unlock-link" href="tel:{{ c.phone }}">{{ c.phone }}</a>
+          {% elif c.phone %}<span class="muted">{{ mask_phone(c.phone) }}</span>
+          {% else %}—{% endif %}
+        </td>
+        <td>
+          {% if approved %}
+            <span class="status-pill status-available"><i></i>Approved</span>
+          {% elif declined %}
+            <span class="status-pill status-closed"><i></i>Declined</span>
+          {% else %}
+            <span class="status-pill status-available" style="background:var(--warn-soft);color:var(--warn)"><i></i>Pending</span>
+          {% endif %}
+        </td>
         <td class="nowrap">{{ item.contact.created_at[:10] if item.contact.created_at else '—' }}</td>
         <td><span class="status-badge status-{{ c.status }}">{{ c.status | capitalize }}</span></td>
         <td class="table-actions">
+          {% if declined or not approved %}
+            <form method="post" action="{{ url_for('hr.resend_contact_request', contact_id=item.contact.id) }}" style="margin-bottom:6px">
+              <button class="btn btn-outline btn-sm" type="submit">Resend</button>
+            </form>
+          {% endif %}
           <form method="post" action="{{ url_for('hr.set_candidate_status', contact_id=item.contact.id) }}">
             <select name="status" class="status-select" onchange="this.form.submit()">
               <option value="available" {{ 'selected' if c.status == 'available' }}>Available</option>

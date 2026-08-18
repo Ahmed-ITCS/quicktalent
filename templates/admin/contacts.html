@@ -23,6 +23,7 @@
         <th>Candidate</th>
         <th>Candidate contact</th>
         <th>Connected</th>
+        <th>Approval</th>
         <th>Status</th>
         <th></th>
       </tr>
@@ -44,6 +45,15 @@
           </div>
         </td>
         <td class="nowrap">{{ item.contact.created_at[:10] if item.contact.created_at else '—' }}</td>
+        <td>
+          {% if item.contact.status == 'approved' %}
+            <span class="status-pill status-available"><i></i>Approved</span>
+          {% elif item.contact.status == 'declined' %}
+            <span class="status-pill status-closed"><i></i>Declined</span>
+          {% else %}
+            <span class="status-pill status-available" style="background:var(--warn-soft);color:var(--warn)"><i></i>{{ item.contact.status | capitalize }}</span>
+          {% endif %}
+        </td>
         <td><span class="status-badge status-{{ item.candidate.status }}">{{ item.candidate.status | capitalize }}</span></td>
         <td class="table-actions">
           <form method="post" action="{{ url_for('admin.delete_contact', contact_id=item.contact.id) }}" onsubmit="return confirmDelete('Delete this connection record?');">

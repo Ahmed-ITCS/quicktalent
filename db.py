@@ -361,7 +361,7 @@ class SupabaseBackend(_BaseBackend):
         return out
 
     def set_contact_status(self, contact_id, status):
-        if status in ("requested", "closed"):
+        if status in ("requested", "approved", "declined", "closed"):
             self._supa.table("contacts").update({"status": status}).eq("id", contact_id).execute()
 
     def delete_contact(self, contact_id):
@@ -631,18 +631,30 @@ class AirtableBackend(_BaseBackend):
         return out[:limit]
 
     # ------------------------------------------------------------- contacts
+    def _friendly_airtable_error(self, exc):
+        msg = str(exc)
+        if "Status" in msg or "Invalid value" in msg:
+            return ValueError(
+                "Airtable Contacts 'Status' field needs the options 'approved' and 'declined'. "
+                "Add them in the Airtable UI, then retry."
+            )
+        return ValueError(f"Airtable error: {msg}")
+
     def create_contact(self, hr_id, candidate_id):
         existing = self.get_contact(hr_id, candidate_id)
         if existing:
             return existing
-        rec = self.contacts.create(
-            {
-                AIR_CONTACT["hr_id"]: hr_id,
-                AIR_CONTACT["candidate_id"]: candidate_id,
-                AIR_CONTACT["status"]: "requested",
-            },
-            typecast=True,
-        )
+        try:
+            rec = self.contacts.create(
+                {
+                    AIR_CONTACT["hr_id"]: hr_id,
+                    AIR_CONTACT["candidate_id"]: candidate_id,
+                    AIR_CONTACT["status"]: "requested",
+                },
+                typecast=True,
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise self._friendly_airtable_error(exc) from exc
         return self._contact_from_row(rec)
 
     def get_contact(self, hr_id, candidate_id):
@@ -694,8 +706,11 @@ class AirtableBackend(_BaseBackend):
         return out
 
     def set_contact_status(self, contact_id, status):
-        if status in ("requested", "closed"):
-            self.contacts.update(contact_id, {AIR_CONTACT["status"]: status}, typecast=True)
+        if status in ("requested", "approved", "declined", "closed"):
+            try:
+                self.contacts.update(contact_id, {AIR_CONTACT["status"]: status}, typecast=True)
+            except Exception as exc:  # noqa: BLE001
+                raise self._friendly_airtable_error(exc) from exc
 
     def delete_contact(self, contact_id):
         self.contacts.delete(contact_id)
@@ -1023,7 +1038,7 @@ class SqliteBackend(_BaseBackend):
         return out
 
     def set_contact_status(self, contact_id, status):
-        if status in ("requested", "closed"):
+        if status in ("requested", "approved", "declined", "closed"):
             self._conn().execute("update contacts set status = ? where id = ?", (status, contact_id))
             self._conn().commit()
 

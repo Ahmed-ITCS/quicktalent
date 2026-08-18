@@ -1,4 +1,6 @@
 {% extends "base_app.html" %}
+{% set approved = contact and contact.status == 'approved' %}
+{% set pending = contact and contact.status == 'requested' %}
 {% block title %}{{ candidate.name }} — QuickTalent{% endblock %}
 {% block content %}
 
@@ -18,13 +20,15 @@
       </div>
     </div>
     <div class="profile-hero-actions">
-      {% if contact %}
-        <span class="btn btn-success">✓ In your contacts</span>
+      {% if approved %}
+        <span class="btn btn-success">✓ Contact approved</span>
+      {% elif pending %}
+        <span class="btn btn-disabled">Request sent — awaiting approval</span>
       {% elif candidate.status == 'available' %}
         <form method="post" action="{{ url_for('hr.contact', candidate_id=candidate.id) }}">
           <button class="btn btn-primary btn-lg" type="submit">Contact this person</button>
         </form>
-        <p class="contact-hint">They'll be notified by email with your company details.</p>
+        <p class="contact-hint">They'll approve via email before you see their contact details.</p>
       {% else %}
         <span class="btn btn-disabled btn-lg">Profile {{ candidate.status }}</span>
       {% endif %}
@@ -44,17 +48,19 @@
         {% if candidate.location %}<div><dt>Location</dt><dd>{{ candidate.location }}</dd></div>{% endif %}
         {% if candidate.years_experience is not none %}<div><dt>Experience</dt><dd>{{ candidate.years_experience }} years</dd></div>{% endif %}
         {% if candidate.last_employer %}<div><dt>Last employer</dt><dd>{{ candidate.last_employer }}</dd></div>{% endif %}
-        {% if candidate.linkedin_url %}
+        {% if candidate.linkedin_url and approved %}
           <div><dt>LinkedIn</dt><dd><a href="{{ candidate.linkedin_url }}" target="_blank" rel="noopener">{{ candidate.linkedin_url | truncate(40) }}</a></dd></div>
         {% endif %}
         <div><dt>Status</dt><dd><span class="status-badge status-{{ candidate.status }}">{{ candidate.status | capitalize }}</span></dd></div>
       </dl>
 
-      {% if resume %}
+      {% if resume and approved %}
       <a class="btn btn-outline btn-block" href="{{ resume }}" target="_blank" rel="noopener">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
         Download resume
       </a>
+      {% elif resume and not approved %}
+      <p class="muted">Resume available once <strong>{{ candidate.name }}</strong> approves your contact request.</p>
       {% else %}
       <p class="muted">No resume uploaded for this profile.</p>
       {% endif %}
@@ -62,11 +68,11 @@
 
     <div class="panel">
       <h2 class="panel-title">Contact details</h2>
-      {% if contact %}
+      {% if approved %}
         <div class="unlocked-box">
           <p class="unlocked-note">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-            Contact unlocked — reach out directly.
+            Contact unlocked — {{ candidate.name }} approved your request.
           </p>
           <div class="contact-reveal">
             <div><span class="contact-label">Email</span><a href="mailto:{{ candidate.email }}">{{ candidate.email }}</a></div>
@@ -75,11 +81,29 @@
           </div>
           <p class="muted">Connected since {{ contact.created_at[:10] if contact.created_at else '—' }}</p>
         </div>
+      {% elif contact and contact.status == 'declined' %}
+        <div class="locked-box">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          <h3>Request declined</h3>
+          <p>{{ candidate.name }} chose not to share their contact details with you.</p>
+          <form method="post" action="{{ url_for('hr.resend_contact_request', contact_id=contact.id) }}">
+            <button class="btn btn-outline" type="submit">Resend request</button>
+          </form>
+        </div>
+      {% elif pending %}
+        <div class="locked-box">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          <h3>Awaiting approval</h3>
+          <p>We emailed {{ candidate.name }} asking to share their email, phone, LinkedIn and resume with you. Details unlock the moment they approve.</p>
+          <form method="post" action="{{ url_for('hr.resend_contact_request', contact_id=contact.id) }}">
+            <button class="btn btn-outline" type="submit">Resend email</button>
+          </form>
+        </div>
       {% else %}
         <div class="locked-box">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
           <h3>Contact details are private</h3>
-          <p>Press <strong>Contact this person</strong> and both sides will see each other's email and phone.</p>
+          <p>Press <strong>Contact this person</strong> and they'll approve before you see their email, phone, LinkedIn and resume.</p>
           <p class="masked-preview">
             <span>{{ mask_email(candidate.email) }}</span>
             {% if candidate.phone %}<span>{{ mask_phone(candidate.phone) }}</span>{% endif %}

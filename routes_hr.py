@@ -9,7 +9,8 @@ from flask import (
 )
 
 import db as database
-from auth_utils import current_user, hash_password, login_required, mask_email, mask_phone, verify_password
+from auth_utils import current_user, hash_password, login_required, make_approval_token, mask_email, mask_phone, verify_password
+from config import config
 from email_service import send_contact_email, send_status_email
 
 bp = Blueprint("hr", __name__)
@@ -106,9 +107,14 @@ def contact(candidate_id):
 
     contact = database.db.get_contact(user["id"], candidate_id)
     if not contact:
-        contact = database.db.create_contact(user["id"], candidate_id)
+        token = make_approval_token(user["id"], candidate_id)
+        try:
+            contact = database.db.create_contact(user["id"], candidate_id)
+        except ValueError as exc:
+            flash(str(exc), "error")
+            return redirect(url_for("hr.candidate_detail", candidate_id=candidate_id))
         flash(
-            "Contact request sent! The candidate was notified and you can now see their contact details.",
+            "Request sent! The candidate will approve before your details unlock.",
             "success",
         )
         if candidate["email"]:
@@ -117,10 +123,43 @@ def contact(candidate_id):
                 candidate_email=candidate["email"],
                 hr=user,
                 job_title=candidate["job_title"],
+                approval_url=f"{config.APP_BASE_URL}/contact-requests/{token}",
             )
     else:
         flash("You already have this candidate in your contacts.", "info")
     return redirect(url_for("hr.contacts"))
+
+
+@bp.route("/contacts/<contact_id>/resend", methods=["POST"])
+@login_required
+def resend_contact_request(contact_id):
+    user = current_user()
+    for item in database.db.list_contacts_for_hr(user["id"]):
+        if item["contact"]["id"] != contact_id:
+            continue
+        contact = item["contact"]
+        if contact["status"] not in ("requested", "declined"):
+            flash("This request isn't waiting for approval anymore.", "error")
+            return redirect(url_for("hr.contacts"))
+        try:
+            database.db.set_contact_status(contact_id, "requested")
+        except ValueError as exc:
+            flash(str(exc), "error")
+            return redirect(url_for("hr.contacts"))
+        token = make_approval_token(user["id"], item["candidate"]["id"])
+        if item["candidate"]["email"]:
+            send_contact_email(
+                candidate_name=item["candidate"]["name"],
+                candidate_email=item["candidate"]["email"],
+                hr=user,
+                job_title=item["candidate"]["job_title"],
+                approval_url=f"{config.APP_BASE_URL}/contact-requests/{token}",
+            )
+            flash(f"Request re-sent to {item['candidate']['name']}.", "success")
+        else:
+            flash("No email on file for this candidate.", "error")
+        return redirect(url_for("hr.contacts"))
+    abort(404)
 
 
 @bp.route("/contacts")
@@ -128,7 +167,7 @@ def contact(candidate_id):
 def contacts():
     user = current_user()
     items = database.db.list_contacts_for_hr(user["id"])
-    return render_template("contacts.html", items=items)
+    return render_template("contacts.html", items=items, mask_email=mask_email, mask_phone=mask_phone)
 
 
 @bp.route("/contacts/<contact_id>/status", methods=["POST"])

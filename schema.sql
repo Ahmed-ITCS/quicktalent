@@ -24,6 +24,10 @@ create table if not exists public.contacts (
   unique (hr_id, candidate_id)
 );
 
+-- Rollout note: pre-feature contact requests were already visible to HR.
+-- Run once after deploying to unlock them:
+-- update public.contacts set status = 'approved' where status = 'requested';
+
 -- Optional: track employment status on candidates ('available' | 'employed' | 'closed')
 do $$
 begin

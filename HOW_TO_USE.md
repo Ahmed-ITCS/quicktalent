@@ -11,8 +11,9 @@ opportunity. Candidates' contact details stay **hidden** until a real interest i
 
 **Key rule of the platform:**
 
-> Email & phone are masked for everyone. Press **Contact** → the candidate is notified by email
-> → **both sides** get each other's contact details.
+> Email, phone, LinkedIn & resume are masked/hidden for everyone. Press **Contact** → the
+> candidate gets an **approve / decline email** → only after they approve do **you** unlock their
+> full contact details.
 
 ---
 
@@ -66,21 +67,27 @@ Click **Apply**, or **Reset** to clear. Results are paginated (12 per page).
 
 Click the candidate's name or **View**:
 
-- Full skills list, experience, last employer, LinkedIn, resume (**Download resume** button)
+- Full skills list, experience, last employer
+- **LinkedIn link and resume download are locked** until the candidate approves your request
 - **Contact details panel**:
-  - If you haven't contacted them → locked box with masked contact preview
-  - If you have → unlocked box with **full email, phone, LinkedIn** and the connected date
+  - Haven't contacted them → locked box with masked contact preview
+  - Request sent → "Awaiting approval" — you see nothing until they approve
+  - Request declined → you can **Resend request** (a fresh email goes out)
+  - Approved → unlocked box with **full email, phone, LinkedIn, resume** and the connected date
 
 ### 2.6 Contact a candidate (the important step)
 
 1. On a candidate card or profile, click **Contact this person**.
 2. What happens:
    - A connection record is created instantly
-   - **You** unlock their full email + phone (see "My Contacts")
-   - The **candidate** receives an email containing **your company name, contact email, and phone**
-   - The candidate **replies to that email** → the reply goes straight to your inbox
-     (emails are sent with your address as Reply-To)
-3. From then on you and the candidate can contact each other freely.
+   - The **candidate** receives a branded email from QuickTalent with **two buttons**:
+     **"Approve & share my details"** and **"Not now"**
+   - The candidate opens the link → a QuickTalent decision page shows **your company name,
+     contact email and phone** → they click Approve or Not now
+   - If they **approve** → their email, phone, LinkedIn and resume unlock in your contacts
+   - If they **decline** → nothing is shared; you can re-request later
+3. The candidate's reply to the approval email goes straight to your inbox
+   (emails are sent with your address as Reply-To).
 
 Notes:
 - You cannot contact a candidate whose status is **Employed** or **Closed**.
@@ -90,8 +97,10 @@ Notes:
 
 A table of every candidate you've contacted:
 
-- **Email & phone unlocked** — click to open your mail client or dial
-- **Connected** — date you made contact
+- **Approval column** — Pending / Approved / Declined
+- **Email & phone** are masked until the candidate **approves**; then they're clickable links
+- **Resend** button — re-asks a Pending or Declined candidate (new email, new link)
+- **Connected** — date you first made contact
 - **Status dropdown** — update the candidate's status:
   - **Employed** → candidate is notified by email ("congratulations on your new role")
   - **Closed** → candidate is notified their profile is closed
@@ -159,7 +168,8 @@ The full connection matrix:
 | When | To | What it contains |
 |---|---|---|
 | HR registers | HR email | Verification link (24h) |
-| HR contacts a candidate | Candidate email | Company name, contact email, phone — "reply to connect" |
+| HR contacts a candidate | Candidate email | Branded request: HR company card + **Approve / Not now** buttons |
+| Candidate approves/declines | — | Status flips in the HR's contacts (approved unlocks details) |
 | HR marks Employed | Candidate email | Congratulations + company name |
 | HR marks Closed | Candidate email | Profile closed notice + company name |
 
@@ -173,7 +183,8 @@ The full connection matrix:
 |---|---|---|
 | Browse candidates with filters | ✅ | ✅ |
 | See masked contacts | ✅ | ✅ |
-| Contact candidates & unlock details | ✅ | ✅ |
+| Contact candidates & unlock details | ✅ (after candidate approves) | ✅ |
+| Resend an approval request | ✅ | ✅ |
 | See own contacts & update status | ✅ | ✅ |
 | See ALL candidates + contact info | ❌ | ✅ |
 | Edit / delete candidate profiles | ❌ | ✅ |
@@ -196,7 +207,7 @@ The full connection matrix:
 
 - [ ] Register company account → verify email → sign in
 - [ ] Browse with filters to find your first candidates
-- [ ] Open a profile, review skills + resume
-- [ ] Press **Contact** → candidate notified → you get their email/phone
+- [ ] Open a profile, review skills (resume unlocks after approval)
+- [ ] Press **Contact** → candidate approves via email → you get their email/phone/LinkedIn/resume
 - [ ] Reach out by email (reply thread goes both ways)
 - [ ] On hire → mark **Employed** so the network stays fresh

@@ -19,11 +19,13 @@ def create_app():
 
     from routes_admin import bp as admin_bp
     from routes_auth import bp as auth_bp
+    from routes_candidate import bp as candidate_bp
     from routes_hr import bp as hr_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(hr_bp)
     app.register_blueprint(admin_bp)
+    app.register_blueprint(candidate_bp)
 
     @app.context_processor
     def inject_globals():

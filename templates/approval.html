@@ -1,0 +1,73 @@
+{% extends "base_public.html" %}
+{% block title %}Contact request — QuickTalent{% endblock %}
+{% block content %}
+<div class="auth-page">
+  <div class="auth-card">
+
+    {% if state == 'invalid' %}
+      <div class="auth-card-center">
+        <span class="error-orb">!</span>
+        <h1>{{ 'Something went wrong' if error else 'Link not found' }}</h1>
+        <p>{{ error if error else 'This approval link is invalid or has expired. If you think this is a mistake, reply to the original email.' }}</p>
+      </div>
+
+    {% elif state == 'approved' %}
+      <div class="auth-card-center">
+        <span class="success-orb">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+        </span>
+        <h1>Details shared</h1>
+        <p><strong>{{ item.hr.company_name }}</strong> can now see your email, phone, LinkedIn and resume. They'll reach out directly.</p>
+      </div>
+
+    {% elif state == 'declined' %}
+      <div class="auth-card-center">
+        <span class="error-orb">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </span>
+        <h1>Noted — nothing shared</h1>
+        <p>Your details stay private. <strong>{{ item.hr.company_name }}</strong> was told you're not interested, so they won't be in touch.</p>
+      </div>
+
+    {% elif state == 'closed' %}
+      <div class="auth-card-center">
+        <span class="error-orb">!</span>
+        <h1>Request closed</h1>
+        <p>This contact request is no longer active.</p>
+      </div>
+
+    {% else %}
+      <div class="auth-head">
+        <span class="eyebrow">Contact request</span>
+        <h1 style="margin-top:14px">Hi {{ item.candidate.name }},</h1>
+        <p><strong>{{ item.hr.company_name }}</strong> would like to reach you regarding
+          {% if item.candidate.job_title %}<strong>{{ item.candidate.job_title }}</strong>{% else %}your profile{% endif %}
+          on QuickTalent.</p>
+      </div>
+
+      <dl class="detail-list" style="border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:22px">
+        <div><dt>Company</dt><dd>{{ item.hr.company_name }}</dd></div>
+        <div><dt>Contact email</dt><dd>{{ item.hr.email }}</dd></div>
+        {% if item.hr.phone %}<div><dt>Phone</dt><dd>{{ item.hr.phone }}</dd></div>{% endif %}
+        {% if item.candidate.job_title %}<div><dt>Role</dt><dd>{{ item.candidate.job_title }}</dd></div>{% endif %}
+      </dl>
+
+      <p class="muted" style="margin-bottom:18px">
+        Approving shares your <strong>email, phone, LinkedIn and resume</strong> with
+        <strong>{{ item.hr.company_name }}</strong>. Nothing is revealed until you approve.
+      </p>
+
+      <form method="post" action="{{ url_for('candidate.approve', token=token) }}" style="display:flex;flex-direction:column;gap:10px">
+        <button class="btn btn-primary btn-lg btn-block" type="submit">
+          Approve &amp; share my details
+        </button>
+      </form>
+      <form method="post" action="{{ url_for('candidate.decline', token=token) }}" style="display:flex;flex-direction:column;gap:10px">
+        <button class="btn btn-outline btn-lg btn-block" type="submit">Not now</button>
+      </form>
+      <p class="auth-switch">You can answer this request once. If you change your mind later, they can send you a new request.</p>
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}

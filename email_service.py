@@ -72,32 +72,89 @@ def send_verification_email(to, verify_url):
     )
 
 
-def send_contact_email(candidate_name, candidate_email, hr, job_title):
-    """Notify the candidate that an HR company wants to connect; include the HR's contact details."""
-    subject = f"{hr['company_name']} is interested in your profile — {job_title or 'opportunity'}"
+def send_contact_email(candidate_name, candidate_email, hr, job_title, approval_url):
+    """Ask the candidate to approve sharing their contact details with an interested HR company."""
+    subject = f"{hr['company_name']} wants to connect — approve & share your details?"
     html = f"""
-    <div style="font-family:Inter,Arial,sans-serif;max-width:520px;margin:0 auto;padding:32px">
-      <h2 style="color:#0f172a;margin:0 0 12px">Hi {candidate_name},</h2>
-      <p style="color:#475569;line-height:1.6">
-        Great news — <strong>{hr['company_name']}</strong> saw your profile on QuickTalent and is
-        interested in your experience{(' as <strong>' + job_title + '</strong>') if job_title else ''}.
-      </p>
-      <p style="color:#475569;line-height:1.6">Their details so you can connect:</p>
-      <table style="background:#f8fafc;border-radius:10px;padding:16px;margin:16px 0;width:100%;color:#334155;font-size:14px">
-        <tr><td style="padding:4px 0;color:#94a3b8">Company</td><td><strong>{hr['company_name']}</strong></td></tr>
-        <tr><td style="padding:4px 0;color:#94a3b8">Contact email</td><td>{hr['email']}</td></tr>
-        <tr><td style="padding:4px 0;color:#94a3b8">Phone</td><td>{hr['phone'] or '—'}</td></tr>
-      </table>
-      <p style="color:#475569;line-height:1.6">
-        Simply <strong>reply to this email</strong> to get in touch with them directly.
-      </p>
-      <p style="color:#94a3b8;font-size:13px">If you are not interested, you can ignore this email.</p>
-    </div>"""
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6f8f7;padding:32px 16px">
+      <tr><td align="center">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:540px;background:#ffffff;border:1px solid #e7ede9;border-radius:16px;overflow:hidden;font-family:Inter,Arial,sans-serif">
+          <tr>
+            <td style="padding:36px 40px 8px">
+              <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%">
+                <tr>
+                  <td>
+                    <table role="presentation" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td width="34" height="34" align="center" valign="middle" style="background:#15803d;border-radius:10px;color:#ffffff;font:800 16px/1 Inter,Arial,sans-serif">Q</td>
+                        <td style="padding-left:10px;font:800 17px/1 Inter,Arial,sans-serif;color:#101d17;letter-spacing:-0.02em">QuickTalent</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:24px 40px 0">
+              <h1 style="margin:0 0 10px;font:800 24px/1.2 Inter,Arial,sans-serif;color:#101d17;letter-spacing:-0.02em">Hi {candidate_name},</h1>
+              <p style="margin:0;color:#34483d;line-height:1.65;font-size:15px">
+                <strong>{hr['company_name']}</strong> saw your profile on QuickTalent and would like your contact details{(' for the <strong>' + job_title + '</strong> role') if job_title else ''}.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:24px 40px 0">
+              <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;background:#f4faf6;border:1px solid #e7f5ec;border-radius:12px">
+                <tr>
+                  <td style="padding:18px 20px">
+                    <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%">
+                      <tr><td style="padding:3px 0;color:#93a79c;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em">Company</td><td align="right" style="padding:3px 0;color:#101d17;font-weight:700;font-size:14px">{hr['company_name']}</td></tr>
+                      <tr><td style="padding:3px 0;color:#93a79c;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em">Contact email</td><td align="right" style="padding:3px 0;color:#101d17;font-weight:600;font-size:14px">{hr['email']}</td></tr>
+                      <tr><td style="padding:3px 0;color:#93a79c;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em">Phone</td><td align="right" style="padding:3px 0;color:#101d17;font-weight:600;font-size:14px">{hr['phone'] or '—'}</td></tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:26px 40px 0">
+              <p style="margin:0 0 20px;color:#34483d;line-height:1.65;font-size:15px">
+                Approving shares your <strong>email, phone, LinkedIn and resume</strong> with them. You decide — nothing is revealed until you approve.
+              </p>
+              <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%">
+                <tr>
+                  <td align="center" style="padding-bottom:10px">
+                    <a href="{approval_url}" style="display:inline-block;background:#15803d;color:#ffffff;text-decoration:none;padding:14px 30px;border-radius:999px;font:600 15px/1 Inter,Arial,sans-serif">Approve &amp; share my details</a>
+                  </td>
+                </tr>
+                <tr>
+                  <td align="center">
+                    <a href="{approval_url}" style="display:inline-block;background:#ffffff;color:#34483d;text-decoration:none;padding:12px 30px;border-radius:999px;border:1px solid #d4dfd8;font:600 15px/1 Inter,Arial,sans-serif">Not now</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:28px 40px 36px">
+              <p style="margin:0;color:#93a79c;font-size:12.5px;line-height:1.6">
+                This request came from <strong>{hr['company_name']}</strong> via QuickTalent. If you're not interested, choose "Not now" — they won't see your details.<br>
+                If you have questions, just reply to this email.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td></tr>
+    </table>"""
     text = (
-        f"Hi {candidate_name},\n\n{hr['company_name']} saw your profile on QuickTalent and is "
-        f"interested in your experience{(' as ' + job_title) if job_title else ''}.\n\n"
+        f"Hi {candidate_name},\n\n"
+        f"{hr['company_name']} saw your profile on QuickTalent and wants to connect"
+        f"{(' for the ' + job_title + ' role') if job_title else ''}.\n\n"
         f"Company: {hr['company_name']}\nContact email: {hr['email']}\nPhone: {hr['phone'] or '—'}\n\n"
-        f"Reply to this email to connect with them."
+        f"Approve sharing your email, phone, LinkedIn and resume:\n{approval_url}\n"
+        f"Not interested? Choose 'Not now' on that page — nothing is shared without your approval."
     )
     return send_email(
         candidate_email,

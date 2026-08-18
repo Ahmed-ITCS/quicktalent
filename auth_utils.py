@@ -1,7 +1,7 @@
 from functools import wraps
 
 from flask import abort, redirect, session, url_for
-from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
+from itsdangerous import BadSignature, SignatureExpired, URLSafeSerializer, URLSafeTimedSerializer
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from config import config
@@ -26,6 +26,25 @@ def read_verification_token(token):
         return None, "invalid"
     except Exception:
         return None, "invalid"
+
+
+def _approval_serializer():
+    return URLSafeSerializer(config.SECRET_KEY, salt="candidate-approval")
+
+
+def make_approval_token(hr_id, candidate_id):
+    """Stateless signed token for a candidate's approve/decline link (no DB storage)."""
+    return _approval_serializer().dumps({"hr_id": hr_id, "candidate_id": candidate_id})
+
+
+def read_approval_token(token):
+    try:
+        data = _approval_serializer().loads(token)
+        return data.get("hr_id"), data.get("candidate_id")
+    except BadSignature:
+        return None, None
+    except Exception:
+        return None, None
 
 
 def hash_password(password):

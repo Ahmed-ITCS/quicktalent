@@ -51,8 +51,12 @@ QuickTalent runs on Airtable as its database. Follow these steps to get a workin
 |---|---|---|
 | HR ID | Single line text | Auto-created — record ID from HR Accounts |
 | Candidate ID | Single line text | Auto-created — record ID from Candidates |
-| Status | Single select | Options: `requested`, `closed` |
+| Status | Single select | Options: `requested`, `approved`, `declined`, `closed` |
 | Created At | Created time | Auto |
+
+> The candidate approval flow needs the **approved** and **declined** options in the
+> Status field. Existing `requested` contacts created before this feature were already
+> visible to HR — set them to `approved` once when rolling out.
 
 ---
 
