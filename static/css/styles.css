@@ -100,6 +100,7 @@ svg { flex-shrink: 0; }
 .btn-sm { padding: 7px 14px; font-size: 13px; }
 .btn-lg { padding: 14px 26px; font-size: 15px; }
 .btn-block { width: 100%; }
+.btn svg { width: 15px; height: 15px; flex-shrink: 0; }
 
 .icon-btn {
   display: inline-flex; align-items: center; justify-content: center;
