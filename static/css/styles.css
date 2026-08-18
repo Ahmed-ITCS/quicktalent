@@ -501,6 +501,9 @@ svg { flex-shrink: 0; }
 .profile-name-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .profile-name-row h1 { font-size: 28px; }
 .profile-title { color: var(--primary); font-weight: 600; font-size: 15.5px; margin: 6px 0 12px; }
+.candidate-meta { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+.candidate-meta span { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-600); font: 500 13.5px/1 "Inter", sans-serif; }
+.candidate-meta svg { width: 15px; height: 15px; flex-shrink: 0; }
 .profile-hero-actions { text-align: center; }
 .contact-hint { color: var(--ink-400); font-size: 12.5px; margin-top: 10px; max-width: 260px; }
 
