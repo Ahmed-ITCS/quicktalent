@@ -8,7 +8,6 @@ from flask import (
     url_for,
 )
 
-import os
 import db as database
 from auth_utils import current_user, hash_password, login_required, make_approval_token, mask_email, mask_phone, verify_password
 from email_service import send_contact_email, send_status_email
@@ -19,9 +18,6 @@ PER_PAGE = 12
 
 
 def _approval_base():
-    explicit = os.environ.get("APP_BASE_URL", "").strip().rstrip("/")
-    if explicit:
-        return explicit
     proto = request.headers.get("X-Forwarded-Proto") or request.scheme
     return f"{proto}://{request.host}".rstrip("/")
 
