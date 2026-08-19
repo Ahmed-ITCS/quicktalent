@@ -104,29 +104,11 @@ def send_contact_email(candidate_name, candidate_email, hr, job_title, approval_
             </td>
           </tr>
           <tr>
-            <td style="padding:24px 40px 0">
-              <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;background:#f4faf6;border:1px solid #e7f5ec;border-radius:12px">
-                <tr>
-                  <td style="padding:18px 20px">
-                    <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%">
-                      <tr><td style="padding:3px 0;color:#93a79c;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em">Company</td><td align="right" style="padding:3px 0;color:#101d17;font-weight:700;font-size:14px">{hr['company_name']}</td></tr>
-                      <tr><td style="padding:3px 0;color:#93a79c;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em">Contact email</td><td align="right" style="padding:3px 0;color:#101d17;font-weight:600;font-size:14px">{hr['email']}</td></tr>
-                      <tr><td style="padding:3px 0;color:#93a79c;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em">Phone</td><td align="right" style="padding:3px 0;color:#101d17;font-weight:600;font-size:14px">{hr['phone'] or '—'}</td></tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-          <tr>
             <td style="padding:26px 40px 0">
-              <p style="margin:0 0 20px;color:#34483d;line-height:1.65;font-size:15px">
-                Approving shares your <strong>email, phone, LinkedIn and resume</strong> with them. You decide — nothing is revealed until you approve.
-              </p>
               <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%">
                 <tr>
                   <td align="center" style="padding-bottom:10px">
-                    <a href="{approval_url}" style="display:inline-block;background:#15803d;color:#ffffff;text-decoration:none;padding:14px 30px;border-radius:999px;font:600 15px/1 Inter,Arial,sans-serif">Approve &amp; share my details</a>
+                    <a href="{approval_url}" style="display:inline-block;background:#15803d;color:#ffffff;text-decoration:none;padding:14px 30px;border-radius:999px;font:600 15px/1 Inter,Arial,sans-serif">Approve</a>
                   </td>
                 </tr>
                 <tr>
